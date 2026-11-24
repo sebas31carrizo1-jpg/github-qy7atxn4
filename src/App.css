@@ -4485,3 +4485,34 @@ button,
     font-size: 27px;
   }
 }
+
+/* Navegación principal reducida a dos accesos */
+.olm-home-options { display:grid; grid-template-columns:1fr; gap:14px; margin-top:20px; }
+.olm-home-option { display:grid; grid-template-columns:54px minmax(0,1fr) 44px; align-items:center; gap:17px; width:100%; min-height:125px; padding:22px 24px; border:1px solid #fff; border-radius:15px; background:#fff; color:#102033; text-align:left; cursor:pointer; box-shadow:0 9px 24px #0002; transition:transform .18s,box-shadow .18s; }
+.olm-home-option:hover { transform:translateY(-3px); box-shadow:0 14px 30px #0003; }
+.olm-option-number { display:grid; place-items:center; width:48px; height:48px; border-radius:12px; background:#eaf2f8; color:#1b5478; font-size:15px; font-weight:900; }
+.olm-option-copy { display:flex; flex-direction:column; gap:6px; }
+.olm-option-copy small { color:#39708e; font-size:9px; font-weight:900; letter-spacing:1.3px; }
+.olm-option-copy strong { color:#102033; font-size:clamp(18px,2vw,24px); }
+.olm-option-copy em { color:#52677c; font-size:12px; font-style:normal; }
+.olm-option-arrow { display:grid; place-items:center; width:38px; height:38px; border-radius:50%; background:#102f49; color:#fff; font-size:24px; }
+.olm-datos-hub { padding:28px 0 45px; }
+.olm-datos-hub-heading { padding:34px; border:1px solid #2c4b65; border-radius:16px; background:linear-gradient(115deg,#12263d,#164451); }
+.olm-datos-hub-heading h1 { margin:10px 0; color:#fff; font-size:clamp(32px,5vw,52px); }
+.olm-datos-hub-heading h1 span { color:#f2c14e; }
+.olm-datos-hub-heading p { color:#c3d4e3; font-size:14px; }
+.olm-datos-hub-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; margin:18px 0; }
+.olm-datos-card { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:12px; min-height:205px; padding:23px; border:1px solid #fff; border-radius:13px; background:#fff; color:#102033; text-align:left; cursor:pointer; box-shadow:0 8px 22px #0002; }
+.olm-datos-card > span { color:#47728e; font-size:10px; font-weight:900; }
+.olm-datos-card strong { color:#102033; font-size:21px; }
+.olm-datos-card em { color:#53697d; font-size:12px; font-style:normal; line-height:1.5; }
+.olm-datos-card b { position:absolute; right:20px; bottom:17px; color:#174968; font-size:24px; }
+.olm-datos-card:hover { transform:translateY(-2px); }
+.olm-back-button { min-height:42px; padding:9px 15px; border:1px solid #fff; border-radius:9px; background:#fff; color:#102033; font-weight:800; cursor:pointer; }
+@media(max-width:760px) {
+ .olm-datos-hub-grid { grid-template-columns:1fr; }
+ .olm-home-option { grid-template-columns:42px minmax(0,1fr) 34px; min-height:105px; padding:16px; gap:12px; }
+ .olm-option-number { width:38px; height:38px; }
+ .olm-option-copy em { font-size:10px; }
+ .olm-datos-hub-heading { padding:22px; }
+}

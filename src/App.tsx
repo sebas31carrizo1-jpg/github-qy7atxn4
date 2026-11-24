@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './App.css';
 import { supabase } from './lib/supabase';
+import Elecciones2027 from './modules/elecciones2027/Elecciones2027';
 
 function AjustarMapa({ data }: { data: any }) {
   const map = useMap();
@@ -144,23 +145,14 @@ function App() {
     }
 
     const { data: perfil, error: errorPerfil } = await supabase
-      .from('perfiles')
-      .select('id, nombre, rol, activo, debe_cambiar_password')
-      .eq('id', data.user.id)
+      .from('elecciones_perfiles')
+      .select('user_id, email, nombre, rol, activo')
+      .eq('user_id', data.user.id)
       .maybeSingle();
 
     if (errorPerfil || !perfil || !perfil.activo) {
       await supabase.auth.signOut();
       setErrorLogin('La cuenta no está habilitada para ingresar.');
-      setCargandoLogin(false);
-      return;
-    }
-
-    if (perfil.debe_cambiar_password) {
-      await supabase.auth.signOut();
-      setErrorLogin(
-        'Esta cuenta debe cambiar su contraseña inicial. Estamos preparando ese paso.'
-      );
       setCargandoLogin(false);
       return;
     }
@@ -251,7 +243,7 @@ function App() {
     const comprobarConexion = async () => {
       try {
         const { error } = await supabase
-          .from('localidades')
+          .from('elecciones_partidos')
           .select('id')
           .limit(1);
 
@@ -1159,16 +1151,7 @@ function App() {
           </button>
 
           <div className="encabezado-derecha">
-            <button
-              className="boton-login-header"
-              onClick={() => {
-                setErrorLogin('');
-                setMostrarLogin(true);
-              }}
-            >
-              <span aria-hidden="true">↪</span>
-              Iniciar sesión
-            </button>
+
             <span className="estado-header">
               <i className={`estado-punto ${estadoSupabase}`} />
 
@@ -1234,54 +1217,34 @@ function App() {
                   </p>
                 </div>
 
-                <nav aria-label="Secciones principales del Observatorio">
-                  {secciones.map((item) => (
-                    <button
-                      key={item.numero}
-                      className={`menu-seccion menu-seccion-${item.color}`}
-                      onClick={() => irASeccion(item.nombre)}
-                    >
-                      <span className="menu-seccion-imagen-marco">
-                        <img
-                          className="menu-seccion-imagen"
-                          src={item.imagen}
-                          alt={item.imagenAlt}
-                          loading="lazy"
-                        />
-                      </span>
-
-                      <span className="menu-seccion-texto">
-                        <small>{item.etiqueta}</small>
-                        <strong>{item.nombre}</strong>
-                        <span className="menu-seccion-descripcion">
-                          {item.descripcion}
-                        </span>
-                      </span>
-
-                      <span className="menu-seccion-derecha">
-                        <span className="menu-seccion-numero">
-                          {item.numero}
-                        </span>
-                        <span className="menu-seccion-flecha">→</span>
-                      </span>
-                    </button>
-                  ))}
+                <nav className="olm-home-options" aria-label="Secciones principales">
+                  <button
+                    className="olm-home-option"
+                    onClick={() => {
+                      irASeccion('Datos La Matanza');
+                    }}
+                  >
+                    <span className="olm-option-number">01</span>
+                    <span className="olm-option-copy">
+                      <small>OBSERVATORIO DISTRITAL</small>
+                      <strong>Datos La Matanza</strong>
+                      <em>Historia electoral, política, territorio e indicadores.</em>
+                    </span>
+                    <span className="olm-option-arrow">→</span>
+                  </button>
+                  <button
+                    className="olm-home-option"
+                    onClick={() => irASeccion('Escrutinio 2027')}
+                  >
+                    <span className="olm-option-number">02</span>
+                    <span className="olm-option-copy">
+                      <small>PRÓXIMO PROCESO ELECTORAL</small>
+                      <strong>Elecciones 2027</strong>
+                      <em>Participación, establecimientos, mesas y resultados.</em>
+                    </span>
+                    <span className="olm-option-arrow">→</span>
+                  </button>
                 </nav>
-
-                <div className="menu-creditos">
-                  <span>Fotografías de referencia:</span>
-                  {secciones.map((item) => (
-                    <a
-                      key={item.numero}
-                      href={item.fuenteUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={`Fuente de imagen: ${item.fuenteImagen}`}
-                    >
-                      {item.fuenteImagen}
-                    </a>
-                  ))}
-                </div>
               </aside>
 
               {/* PRESENTACIÓN DEL OBSERVATORIO */}
@@ -1365,10 +1328,38 @@ function App() {
               <div className="portada-pie-sigla">OLM</div>
             </section>
           </>
+        ) : seccion === 'Datos La Matanza' ? (
+          <section className="olm-datos-hub">
+            <div className="olm-datos-hub-heading">
+              <span className="hero-etiqueta">OBSERVATORIO · LA MATANZA</span>
+              <h1>Datos <span>La Matanza</span></h1>
+              <p>Elegí una dimensión para consultar la información del distrito.</p>
+            </div>
+            <div className="olm-datos-hub-grid">
+              {[
+                { nombre: 'Histórico electoral', descripcion: 'Elecciones, resultados históricos, mapas y circuitos.' },
+                { nombre: 'Política', descripcion: 'Concejo Deliberante, concejales, bloques y representación.' },
+                { nombre: 'Datos', descripcion: 'Territorio, población, salud, economía, educación y estadísticas.' },
+              ].map((item, index) => (
+                <button key={item.nombre} className="olm-datos-card" onClick={() => {
+                  if (item.nombre === 'Histórico electoral') irASeccion('Histórico electoral');
+                  else irASeccion(item.nombre);
+                }}>
+                  <span>0{index + 1}</span>
+                  <strong>{item.nombre}</strong>
+                  <em>{item.descripcion}</em>
+                  <b>→</b>
+                </button>
+              ))}
+            </div>
+            <button className="olm-back-button" onClick={() => irASeccion('Inicio')}>← Volver al inicio</button>
+          </section>
         ) : seccion === 'Histórico electoral' ? (
           bloqueHistorico
         ) : seccion === 'Circuitos electorales' ? (
           bloqueCircuitos
+        ) : seccion === 'Escrutinio 2027' ? (
+          <Elecciones2027 />
         ) : (
           <section
             className={`pagina-modulo modulo-${seccionActual?.color || ''}`}
