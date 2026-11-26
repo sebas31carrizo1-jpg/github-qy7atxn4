@@ -4178,3 +4178,165 @@
     align-items:flex-start;
   }
 }
+
+
+/* RESULTADOS: mapa de colegios y avance de cierre por circuito. */
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-college-map-legend {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px 20px;
+  margin-top:12px;
+  padding:13px 15px;
+  border:1px solid #c5e3ef;
+  border-radius:12px;
+  background:#f4fafe;
+}
+.e27-college-map-legend-parties {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:9px 14px;
+}
+.e27-college-map-legend-parties > strong {
+  flex-basis:100%;
+  color:#174b67;
+  font-size:12px;
+  font-weight:850;
+}
+.e27-college-map-legend-parties > span {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  color:#57788a;
+  font-size:11px;
+  font-weight:650;
+}
+.e27-college-map-legend-parties > span > i {
+  display:inline-block;
+  width:10px;
+  height:10px;
+  flex:0 0 10px;
+  border-radius:3px;
+}
+.e27-college-map-legend-parties > small,
+.e27-college-map-strength {
+  color:#6b8797;
+  font-size:10px;
+  line-height:1.4;
+}
+.e27-college-map-strength {
+  align-self:flex-end;
+  text-align:right;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-closure-section {
+  display:flex;
+  flex-direction:column;
+  gap:13px;
+  margin-top:26px;
+  padding-top:21px;
+  border-top:1px solid #d5eaf3;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-closure-heading {
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:12px;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-closure-heading h3 {
+  margin:5px 0 0;
+  color:#194663;
+  font-size:clamp(18px,2vw,23px);
+  line-height:1.25;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-closure-heading > strong {
+  color:#087f9f;
+  font-size:clamp(23px,3vw,30px);
+  font-weight:900;
+  white-space:nowrap;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-grid {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:11px;
+  width:100%;
+  margin-top:7px;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-card {
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+  min-width:0;
+  box-sizing:border-box;
+  padding:13px 14px;
+  border:1px solid #c6e3ef;
+  border-radius:12px;
+  background:#f6fbfe;
+}
+.e27-circuit-closure-top {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.e27-circuit-closure-top > strong {
+  color:#194965;
+  font-size:14px;
+  font-weight:850;
+}
+.e27-circuit-closure-top > b {
+  color:#087f9f;
+  font-size:17px;
+  font-weight:900;
+  font-variant-numeric:tabular-nums;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-track {
+  position:relative;
+  display:block;
+  width:100%;
+  height:9px;
+  overflow:hidden;
+  border:1px solid #d4e5ec;
+  border-radius:999px;
+  background:#e7f0f4;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-track > span {
+  display:block;
+  height:100%;
+  min-width:0;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#65c7df 0%,#168eae 100%);
+  transition:width .25s ease;
+}
+.e27-circuit-closure-scale {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:-5px;
+  color:#8aa0ad;
+  font-size:9px;
+  font-weight:750;
+  font-variant-numeric:tabular-nums;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-card > small {
+  color:#607f91;
+  font-size:11px;
+  line-height:1.35;
+}
+.e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-card:has(.e27-circuit-closure-track > span[style*="width: 0%"]) {
+  background:#f7f9fa;
+}
+@media(max-width:620px) {
+  .e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-grid {
+    grid-template-columns:1fr;
+    gap:9px;
+  }
+  .e27-shell:not(:has(.e27-assignment-banner)) .e27-circuit-closure-card {
+    padding:12px 13px;
+  }
+  .e27-college-map-strength {
+    flex-basis:100%;
+    text-align:left;
+  }
+}
