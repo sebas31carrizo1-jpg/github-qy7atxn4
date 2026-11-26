@@ -535,6 +535,8 @@ export default function Elecciones2027() {
   const [responsablePassword, setResponsablePassword] = useState('');
   const [confirmarResponsablePassword, setConfirmarResponsablePassword] = useState('');
   const [usuariosAdmin, setUsuariosAdmin] = useState<UsuarioAdmin[]>([]);
+  const [busquedaResponsables, setBusquedaResponsables] = useState('');
+  const [busquedaColegios, setBusquedaColegios] = useState('');
   const [cargandoUsuariosAdmin, setCargandoUsuariosAdmin] = useState(false);
   const [usuarioPasswordEditando, setUsuarioPasswordEditando] = useState<string | null>(null);
   const [nuevaPasswordUsuario, setNuevaPasswordUsuario] = useState('');
@@ -2775,8 +2777,15 @@ export default function Elecciones2027() {
                       {colegios.length === 0 ? (
                         <div className="e27-empty-state"><strong>No hay colegios activos para administrar</strong><span>Revisá que los establecimientos estén cargados y activos en Supabase.</span></div>
                       ) : (
-                        <div className="e27-college-admin-list">
-                          {colegios.map((colegio) => (
+                        <>
+                          <label className="e27-admin-search-label" htmlFor="e27-buscar-colegios">Buscar establecimiento</label>
+                          <input id="e27-buscar-colegios" type="search" className="e27-admin-search" value={busquedaColegios} onChange={(e) => setBusquedaColegios(e.target.value)} placeholder="Nombre, circuito o número de mesa…" />
+                          <div className="e27-college-admin-list">
+                          {colegios.filter((colegio) => {
+                            const q = busquedaColegios.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const texto = [colegio.nombre, colegio.circuito || '', ...mesas.filter((mesa) => mesa.colegio_id === colegio.id).map((mesa) => String(mesa.numero))].join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return !q || texto.includes(q);
+                          }).map((colegio) => (
                             <article className="e27-college-admin-row" key={colegio.id}>
                               <div className="e27-college-admin-meta">
                                 <span className="e27-college-admin-icon">⌂</span>
@@ -2855,7 +2864,13 @@ export default function Elecciones2027() {
                               </div>
                             </article>
                           ))}
-                        </div>
+                          {colegios.filter((colegio) => {
+                            const q = busquedaColegios.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const texto = [colegio.nombre, colegio.circuito || '', ...mesas.filter((mesa) => mesa.colegio_id === colegio.id).map((mesa) => String(mesa.numero))].join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return !q || texto.includes(q);
+                          }).length === 0 && <div className="e27-empty-state"><strong>No hay establecimientos que coincidan</strong><span>Probá con otro nombre, circuito o número de mesa.</span></div>}
+                          </div>
+                        </>
                       )}
                       <p className="e27-college-admin-note">El identificador_kml que vincula el establecimiento con su polígono cartográfico se conserva aunque cambies el nombre visible. Cambiar el nombre visible no modifica responsables, circuito, mesas, electores ni reportes.</p>
                     </section>
@@ -2930,8 +2945,15 @@ export default function Elecciones2027() {
                       ) : usuariosAdmin.length === 0 ? (
                         <div className="e27-empty-state"><strong>No hay responsables registrados</strong><span>Cuando crees una cuenta desde “Alta de responsables de escuela”, aparecerá en este listado.</span></div>
                       ) : (
-                        <div className="e27-users-list">
-                          {usuariosAdmin.map((usuario) => (
+                        <>
+                          <label className="e27-admin-search-label" htmlFor="e27-buscar-responsables">Buscar responsable</label>
+                          <input id="e27-buscar-responsables" type="search" className="e27-admin-search" value={busquedaResponsables} onChange={(e) => setBusquedaResponsables(e.target.value)} placeholder="Nombre, correo, colegio, circuito o mesa…" />
+                          <div className="e27-users-list">
+                          {usuariosAdmin.filter((usuario) => {
+                            const q = busquedaResponsables.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const texto = [usuario.nombre, usuario.email, ...usuario.colegios.flatMap((colegio) => [colegio.nombre, colegio.circuito || '', ...colegio.numeros_mesas.map(String)])].join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return !q || texto.includes(q);
+                          }).map((usuario) => (
                             <article className="e27-user-card" key={usuario.user_id}>
                               <div className="e27-user-card-top">
                                 <div className="e27-user-avatar" aria-hidden="true">{(usuario.nombre || usuario.email || 'U').trim().slice(0, 1).toUpperCase()}</div>
@@ -3113,7 +3135,13 @@ export default function Elecciones2027() {
                               </div>
                             </article>
                           ))}
-                        </div>
+                          {usuariosAdmin.filter((usuario) => {
+                            const q = busquedaResponsables.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            const texto = [usuario.nombre, usuario.email, ...usuario.colegios.flatMap((colegio) => [colegio.nombre, colegio.circuito || '', ...colegio.numeros_mesas.map(String)])].join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                            return !q || texto.includes(q);
+                          }).length === 0 && <div className="e27-empty-state"><strong>No hay responsables que coincidan</strong><span>Probá con otro nombre, correo, colegio, circuito o mesa.</span></div>}
+                          </div>
+                        </>
                       )}
                     </section>
                   )}
