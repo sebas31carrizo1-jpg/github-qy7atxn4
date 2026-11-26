@@ -3121,6 +3121,7 @@ export default function Elecciones2027() {
                             </article>
                           ))}
                         </div>
+                        </>
                       )}
                     </section>
                   )}
