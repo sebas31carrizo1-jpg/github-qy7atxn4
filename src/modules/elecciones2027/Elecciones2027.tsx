@@ -105,6 +105,14 @@ type ReportePendiente = {
   creado_en: string;
   colegio?: string;
   mesa?: number;
+  circuito?: string;
+  responsable?: string;
+  electores_habilitados?: number;
+  franjas?: Array<{ hora: string; votantes: number }>;
+  votosPartidos?: Array<{ nombre: string; sigla?: string; color?: string; votos: number }>;
+  votos_blancos?: number;
+  votos_nulos?: number;
+  totalVotos?: number;
   tipo: 'participacion' | 'escrutinio';
 };
 
@@ -1079,21 +1087,47 @@ export default function Elecciones2027() {
   const cargarReportesAdmin = useCallback(async () => {
     const [part, escr] = await Promise.all([
       supabase.from('elecciones_reportes_participacion')
-        .select('id,mesa_id,user_id,estado,creado_en,elecciones_mesas(numero,elecciones_colegios(nombre))')
+        .select('id,mesa_id,user_id,estado,creado_en,elecciones_mesas(numero,electores_habilitados,elecciones_colegios(nombre,circuito)),elecciones_participacion_franjas(hora,votantes)')
         .eq('estado', 'pendiente').order('creado_en', { ascending: true }),
       supabase.from('elecciones_reportes_escrutinio')
-        .select('id,mesa_id,user_id,estado,creado_en,elecciones_mesas(numero,elecciones_colegios(nombre))')
+        .select('id,mesa_id,user_id,estado,creado_en,votos_blancos,votos_nulos,elecciones_mesas(numero,electores_habilitados,elecciones_colegios(nombre,circuito)),elecciones_escrutinio_partidos(votos,elecciones_partidos(nombre,sigla,color))')
         .eq('estado', 'pendiente').order('creado_en', { ascending: true }),
     ]);
+    const userIds = [...new Set([...(part.data ?? []), ...(escr.data ?? [])].map((r: any) => String(r.user_id)).filter(Boolean))];
+    const perfilesResponse = userIds.length
+      ? await supabase.from('elecciones_perfiles').select('user_id,nombre,email').in('user_id', userIds)
+      : { data: [] as any[], error: null };
+    const perfilesPorId = new Map((perfilesResponse.data ?? []).map((p: any) => [String(p.user_id), p]));
     const normalizar = (rows: any[] | null, tipo: 'participacion' | 'escrutinio') =>
       (rows ?? []).map((r) => {
         const mesa = Array.isArray(r.elecciones_mesas) ? r.elecciones_mesas[0] : r.elecciones_mesas;
         const colegioRel = mesa?.elecciones_colegios;
         const colegio = Array.isArray(colegioRel) ? colegioRel[0] : colegioRel;
-        return { ...r, mesa: mesa?.numero, colegio: colegio?.nombre, tipo } as ReportePendiente;
+        const responsable = perfilesPorId.get(String(r.user_id));
+        const franjas = (r.elecciones_participacion_franjas ?? [])
+          .slice().sort((x: any, y: any) => String(x.hora).localeCompare(String(y.hora)));
+        const votosPartidos = (r.elecciones_escrutinio_partidos ?? []).map((fila: any) => {
+          const partidoRel = fila.elecciones_partidos;
+          const partido = Array.isArray(partidoRel) ? partidoRel[0] : partidoRel;
+          return partido ? { nombre: partido.nombre, sigla: partido.sigla, color: partido.color, votos: Number(fila.votos || 0) } : null;
+        }).filter(Boolean);
+        const totalVotos = votosPartidos.reduce((total: number, fila: any) => total + fila.votos, 0)
+          + Number(r.votos_blancos || 0) + Number(r.votos_nulos || 0);
+        return {
+          ...r,
+          mesa: mesa?.numero,
+          colegio: colegio?.nombre,
+          circuito: colegio?.circuito,
+          electores_habilitados: Number(mesa?.electores_habilitados || 0),
+          responsable: responsable?.nombre || responsable?.email || 'Responsable sin identificar',
+          franjas,
+          votosPartidos,
+          totalVotos,
+          tipo,
+        } as ReportePendiente;
       });
     setReportes([...normalizar(part.data, 'participacion'), ...normalizar(escr.data, 'escrutinio')]);
-    if (part.error || escr.error) setMensaje('No se pudieron consultar todos los reportes pendientes. Revisá las políticas y relaciones de Supabase.');
+    if (part.error || escr.error || perfilesResponse.error) setMensaje('No se pudieron consultar todos los datos de los reportes pendientes. Revisá las políticas y relaciones de Supabase.');
   }, []);
 
   useEffect(() => {
@@ -3198,7 +3232,33 @@ export default function Elecciones2027() {
                       {pestanaEscrutinio === 'pendientes' && (
                         <section className="e27-panel">
                           <div className="e27-panel-heading"><div><span className="e27-kicker">CONTROL CENTRAL</span><h3>Reportes pendientes de aprobación</h3><p>Solo la administración central puede publicar información en el observatorio público.</p></div><button className="e27-white-button" onClick={() => void cargarReportesAdmin()}>Actualizar</button></div>
-                          {reportes.length === 0 ? <div className="e27-empty-state"><strong>No hay reportes pendientes</strong><span>Cuando un responsable envíe información, aparecerá en esta bandeja.</span></div> : <div className="e27-review-list">{reportes.map((r) => <article key={`${r.tipo}-${r.id}`} className="e27-review-card"><div><span className="e27-kicker">{r.tipo === 'participacion' ? 'PARTICIPACIÓN' : 'ESCRUTINIO'}</span><strong>{r.colegio || 'Colegio'} · Mesa {r.mesa ?? '—'}</strong><small>{new Date(r.creado_en).toLocaleString('es-AR')}</small></div><button className="e27-white-button" onClick={() => aprobarReporte(r)}>Aprobar y publicar</button></article>)}</div>}
+                          {reportes.length === 0 ? <div className="e27-empty-state"><strong>No hay reportes pendientes</strong><span>Cuando un responsable envíe información, aparecerá en esta bandeja.</span></div> : <div className="e27-review-grid">{reportes.map((r: any) => {
+                            const totalParticipacion = r.franjas?.length ? Number(r.franjas[r.franjas.length - 1].votantes || 0) : 0;
+                            return <article key={`${r.tipo}-${r.id}`} className="e27-review-card">
+                              <div className="e27-review-card-heading">
+                                <span className={`e27-review-type ${r.tipo === 'participacion' ? 'is-turnout' : 'is-scrutiny'}`}>{r.tipo === 'participacion' ? 'PARTICIPACIÓN' : 'ESCRUTINIO'}</span>
+                                <span className="e27-review-date">{new Date(r.creado_en).toLocaleString('es-AR')}</span>
+                              </div>
+                              <h4>{r.colegio || 'Colegio'}</h4>
+                              <div className="e27-review-meta">
+                                <span><b>Responsable</b>{r.responsable}</span>
+                                <span><b>Circuito</b>{r.circuito || '—'}</span>
+                                <span><b>Mesa</b>{r.mesa ?? '—'}</span>
+                              </div>
+                              {r.tipo === 'participacion' ? (
+                                <div className="e27-review-detail">
+                                  <div className="e27-review-total"><small>ÚLTIMO ACUMULADO</small><strong>{numeroAR(totalParticipacion)} <small>votantes</small></strong><span>{r.electores_habilitados ? `${(totalParticipacion / r.electores_habilitados * 100).toFixed(1)}% de ${numeroAR(r.electores_habilitados)} electores` : 'Padrón no informado'}</span></div>
+                                  <div className="e27-review-hours">{(r.franjas ?? []).map((franja: any) => <span key={franja.hora}><b>{franja.hora}</b><strong>{numeroAR(Number(franja.votantes || 0))}</strong><em>{r.electores_habilitados ? `${(Number(franja.votantes || 0) / r.electores_habilitados * 100).toFixed(1)}%` : '—'}</em></span>)}</div>
+                                </div>
+                              ) : (
+                                <div className="e27-review-detail">
+                                  <div className="e27-review-total"><small>TOTAL DE VOTOS</small><strong>{numeroAR(r.totalVotos || 0)}</strong><span>Blancos: {numeroAR(Number(r.votos_blancos || 0))} · Nulos: {numeroAR(Number(r.votos_nulos || 0))}</span></div>
+                                  <div className="e27-review-votes">{(r.votosPartidos ?? []).map((fila: any, index: number) => <span key={`${fila.nombre}-${index}`}><i style={{ background: fila.color || '#168eae' }} /><b>{fila.nombre}</b><strong>{numeroAR(fila.votos)}</strong><em>{r.totalVotos ? `${(fila.votos / r.totalVotos * 100).toFixed(1)}%` : '0.0%'}</em></span>)}</div>
+                                </div>
+                              )}
+                              <button className="e27-white-button e27-review-approve" onClick={() => aprobarReporte(r)}>Aprobar y publicar</button>
+                            </article>;
+                          })}</div>}
                         </section>
                       )}
                       {pestanaEscrutinio === 'publicados' && (
