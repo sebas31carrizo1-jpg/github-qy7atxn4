@@ -1292,13 +1292,13 @@ function App() {
 
                   <div className="institucional-datos">
                     <div>
-                      <strong>18</strong>
+                      <strong>25</strong>
                       <span>Circuitos electorales</span>
                     </div>
 
                     <div>
-                      <strong>1</strong>
-                      <span>Partido bonaerense</span>
+                      <strong>1.056.920</strong>
+                      <span>Personas habilitadas para votar</span>
                     </div>
 
                     <div>
