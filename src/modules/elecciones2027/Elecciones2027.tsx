@@ -535,6 +535,8 @@ export default function Elecciones2027() {
   const [responsablePassword, setResponsablePassword] = useState('');
   const [confirmarResponsablePassword, setConfirmarResponsablePassword] = useState('');
   const [usuariosAdmin, setUsuariosAdmin] = useState<UsuarioAdmin[]>([]);
+  const [busquedaResponsables, setBusquedaResponsables] = useState('');
+  const [busquedaColegios, setBusquedaColegios] = useState('');
   const [cargandoUsuariosAdmin, setCargandoUsuariosAdmin] = useState(false);
   const [usuarioPasswordEditando, setUsuarioPasswordEditando] = useState<string | null>(null);
   const [nuevaPasswordUsuario, setNuevaPasswordUsuario] = useState('');
@@ -2775,8 +2777,9 @@ export default function Elecciones2027() {
                       {colegios.length === 0 ? (
                         <div className="e27-empty-state"><strong>No hay colegios activos para administrar</strong><span>Revisá que los establecimientos estén cargados y activos en Supabase.</span></div>
                       ) : (
+                        <input aria-label="Buscar establecimientos" type="search" className="e27-admin-search" value={busquedaColegios} onChange={(e) => setBusquedaColegios(e.target.value)} placeholder="Buscar por nombre, circuito o número de mesa…" />
                         <div className="e27-college-admin-list">
-                          {colegios.map((colegio) => (
+                          {colegios.filter((c) => { const q = busquedaColegios.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); const t = [c.nombre,c.circuito || '',...mesas.filter(m => m.colegio_id === c.id).map(m => String(m.numero))].join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); return !q || t.includes(q); }).map((colegio) => (
                             <article className="e27-college-admin-row" key={colegio.id}>
                               <div className="e27-college-admin-meta">
                                 <span className="e27-college-admin-icon">⌂</span>
@@ -2930,8 +2933,9 @@ export default function Elecciones2027() {
                       ) : usuariosAdmin.length === 0 ? (
                         <div className="e27-empty-state"><strong>No hay responsables registrados</strong><span>Cuando crees una cuenta desde “Alta de responsables de escuela”, aparecerá en este listado.</span></div>
                       ) : (
+                        <input aria-label="Buscar responsables" type="search" className="e27-admin-search" value={busquedaResponsables} onChange={(e) => setBusquedaResponsables(e.target.value)} placeholder="Buscar por nombre, correo, colegio, circuito o mesa…" />
                         <div className="e27-users-list">
-                          {usuariosAdmin.map((usuario) => (
+                          {usuariosAdmin.filter((u) => { const q = busquedaResponsables.trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); const t = [u.nombre,u.email,...u.colegios.flatMap(c => [c.nombre,c.circuito || '',...c.numeros_mesas.map(String)])].join(' ').toLocaleLowerCase('es').normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); return !q || t.includes(q); }).map((usuario) => (
                             <article className="e27-user-card" key={usuario.user_id}>
                               <div className="e27-user-card-top">
                                 <div className="e27-user-avatar" aria-hidden="true">{(usuario.nombre || usuario.email || 'U').trim().slice(0, 1).toUpperCase()}</div>
