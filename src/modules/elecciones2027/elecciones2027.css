@@ -4340,3 +4340,38 @@
     text-align:left;
   }
 }
+
+
+/* Directorio de colegios: tarjetas responsive para administración. */
+.e27-college-admin-panel { min-width:0; overflow:hidden; }
+.e27-college-admin-intro { display:flex; align-items:flex-start; justify-content:space-between; gap:18px; margin-bottom:20px; }
+.e27-college-admin-intro > div:first-child { min-width:0; }
+.e27-college-admin-intro h3 { margin:6px 0 8px; color:#17415f; font-family:'Source Serif 4',Georgia,serif; font-size:clamp(21px,2.4vw,27px); line-height:1.2; }
+.e27-college-admin-intro p { max-width:680px; margin:0; color:#607b8c; font-size:14px; line-height:1.6; }
+.e27-college-admin-count { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:0 0 auto; min-width:145px; padding:13px 16px; border:1px solid #c4e2ed; border-radius:13px; background:#f3fafe; color:#5c7a8b; text-align:center; font-size:11px; line-height:1.4; }
+.e27-college-admin-count strong { color:#174b67; font-family:'Source Serif 4',Georgia,serif; font-size:30px; line-height:1.1; }
+.e27-college-admin-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; min-width:0; }
+.e27-college-admin-row { display:flex; flex-direction:column; align-items:stretch; gap:12px; min-width:0; padding:16px; border:1px solid #c8e2ed; border-radius:13px; background:#fff; box-shadow:0 3px 12px rgba(20,70,100,.055); }
+.e27-college-admin-meta { display:flex; align-items:flex-start; gap:11px; min-width:0; }
+.e27-college-admin-meta > div { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.e27-college-admin-icon { display:flex; flex:0 0 34px; width:34px; height:34px; align-items:center; justify-content:center; border-radius:9px; background:#e9f7fb; color:#168eae; }
+.e27-college-admin-meta small { color:#1685a2; font-size:9px; font-weight:850; letter-spacing:.8px; }
+.e27-college-admin-meta strong { color:#17415f; font-size:15px; line-height:1.35; overflow-wrap:anywhere; }
+.e27-college-admin-meta span:not(.e27-college-admin-icon) { color:#668293; font-size:12px; line-height:1.45; overflow-wrap:anywhere; }
+.e27-college-edit-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0; }
+.e27-college-edit-actions > select { flex:1 1 190px; min-width:0; min-height:42px; padding:9px 11px; border:1px solid #b9dce9; border-radius:9px; background:#fff; color:#17415f; font:inherit; font-size:13px; }
+.e27-college-edit-form { display:flex; flex-direction:column; gap:10px; min-width:0; }
+.e27-college-edit-form label,.e27-mesas-config label { display:flex; flex-direction:column; gap:6px; color:#527487; font-size:12px; font-weight:750; }
+.e27-college-edit-form input,.e27-mesas-config input { box-sizing:border-box; width:100%; min-width:0; min-height:42px; padding:9px 11px; border:1px solid #b9dce9; border-radius:9px; color:#17415f; font:inherit; font-size:14px; }
+.e27-mesas-config { display:flex; flex-direction:column; gap:10px; min-width:0; padding:13px; border:1px solid #d1e8f0; border-radius:11px; background:#f7fbfd; }
+.e27-mesa-config-card { display:flex; align-items:flex-end; gap:9px; min-width:0; }
+.e27-mesa-config-card label { flex:1; }
+.e27-college-admin-row .e27-white-button { min-height:40px; padding:9px 13px; border-radius:9px; font-size:12px; white-space:normal; }
+@media(max-width:760px) {
+ .e27-college-admin-intro { flex-direction:column; }
+ .e27-college-admin-count { align-items:flex-start; min-width:0; width:100%; box-sizing:border-box; }
+ .e27-college-admin-count strong { font-size:26px; }
+ .e27-college-admin-list { grid-template-columns:minmax(0,1fr); }
+ .e27-college-admin-row { padding:13px; }
+ .e27-college-edit-actions > button { flex:1 1 auto; }
+}
