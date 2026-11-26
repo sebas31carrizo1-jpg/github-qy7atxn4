@@ -3194,7 +3194,7 @@ export default function Elecciones2027() {
                               aria-pressed={seleccionado}
                               onClick={() => seleccionarFranja(hora)}
                             >
-                              {guardado ? 'Editar' : habilitado ? 'Cargar horario' : 'No disponible'}
+                              {guardado ? seleccionado ? 'Registro seleccionado' : 'Ver registro' : habilitado ? 'Cargar horario' : 'No disponible'}
                             </button>
                           </article>
                         );
