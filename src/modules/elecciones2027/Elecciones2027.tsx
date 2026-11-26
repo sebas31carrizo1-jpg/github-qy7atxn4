@@ -58,6 +58,7 @@ type MesaConfiguracion = {
 type MesaAdminConfiguracion = {
   id: string | null;
   numero: string;
+  reportes_total: number;
 };
 
 type UsuarioAdmin = {
@@ -72,7 +73,7 @@ type UsuarioAdmin = {
     nombre: string;
     circuito: string | null;
     activo: boolean;
-    mesas: Array<{ id: string; numero: number }>;
+    mesas: Array<{ id: string; numero: number; reportes_total: number; reportes_participacion: number; reportes_escrutinio: number }>;
     numeros_mesas: number[];
     cantidad_mesas: number;
   }> ;
@@ -2532,7 +2533,7 @@ export default function Elecciones2027() {
                                             {(configuracionMesasUsuario[key] ?? []).map((mesa, index) => (
                                               <div className="e27-user-mesa-editor" key={mesa.id || `nueva-${index}`}>
                                                 <label>
-                                                  Mesa {index + 1}
+                                                  Número de mesa
                                                   <input
                                                     type="number"
                                                     min="1"
@@ -2547,16 +2548,22 @@ export default function Elecciones2027() {
                                                     required
                                                   />
                                                 </label>
-                                                <span>{mesa.id ? 'Mesa existente · conserva electores y reportes' : 'Mesa nueva'}</span>
+                                                <span>
+                                                  {mesa.reportes_total > 0
+                                                    ? `Con historial: ${mesa.reportes_total} reporte(s). Se puede renumerar, no quitar.`
+                                                    : mesa.id ? 'Existente · sin reportes' : 'Mesa nueva'}
+                                                </span>
                                                 <button
                                                   type="button"
                                                   className="e27-white-button e27-white-button-outline e27-remove-mesa-button"
+                                                  disabled={mesa.reportes_total > 0}
+                                                  title={mesa.reportes_total > 0 ? 'Esta mesa tiene reportes asociados. Podés cambiar su número, pero no quitarla.' : 'Quitar esta mesa'}
                                                   onClick={() => setConfiguracionMesasUsuario((old) => ({
                                                     ...old,
                                                     [key]: (old[key] ?? []).filter((_, itemIndex) => itemIndex !== index),
                                                   }))}
                                                   aria-label={`Quitar mesa ${mesa.numero}`}
-                                                >Quitar</button>
+                                                >{mesa.reportes_total > 0 ? 'Protegida' : 'Quitar'}</button>
                                               </div>
                                             ))}
                                           </div>
@@ -2567,7 +2574,7 @@ export default function Elecciones2027() {
                                             onClick={() => setConfiguracionMesasUsuario((old) => {
                                               const actual = old[key] ?? [];
                                               const maximo = actual.reduce((max, item) => Math.max(max, Number(item.numero) || 0), 0);
-                                              return { ...old, [key]: [...actual, { id: null, numero: String(maximo + 1) }] };
+                                              return { ...old, [key]: [...actual, { id: null, numero: String(maximo + 1), reportes_total: 0 }] };
                                             })}
                                           >+ Agregar mesa</button>
                                           <div className="e27-user-mesas-form-actions">
@@ -2583,7 +2590,7 @@ export default function Elecciones2027() {
                                             setUsuarioMesasEditando(key);
                                             setConfiguracionMesasUsuario((old) => ({
                                               ...old,
-                                              [key]: colegio.mesas.map((mesa) => ({ id: mesa.id, numero: String(mesa.numero) })),
+                                              [key]: colegio.mesas.map((mesa) => ({ id: mesa.id, numero: String(mesa.numero), reportes_total: mesa.reportes_total })),
                                             }));
                                           }}
                                         >✎ Editar mesas y numeración</button>
