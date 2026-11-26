@@ -377,7 +377,6 @@ export default function Elecciones2027() {
   const [perfil, setPerfil] = useState<Perfil | null>(null);
   const [colegios, setColegios] = useState<Colegio[]>([]);
   const [mesas, setMesas] = useState<Mesa[]>([]);
-  const [colegioActivo, setColegioActivo] = useState<string | null>(null);
   const [partidos, setPartidos] = useState<Partido[]>([]);
   const [reportes, setReportes] = useState<ReportePendiente[]>([]);
   const [mensaje, setMensaje] = useState('');
