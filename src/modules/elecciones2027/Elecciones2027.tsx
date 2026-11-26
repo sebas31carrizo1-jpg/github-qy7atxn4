@@ -51,6 +51,15 @@ type Mesa = {
   colegio_id: string;
 };
 
+type EscrutinioCargaGuardado = {
+  id: string;
+  user_id: string;
+  estado: string;
+  votos_partidos: Record<string, number>;
+  votos_blancos: number;
+  votos_nulos: number;
+};
+
 type MesaConfiguracion = {
   numero: string;
 };
@@ -122,9 +131,12 @@ const CIRCUITOS_ELECTORALES = [
 ] as const;
 
 // Cortes horarios para registrar la participación acumulada durante la jornada.
-const HORARIOS_PARTICIPACION = Array.from({ length: 11 }, (_, index) =>
-  `${String(index + 8).padStart(2, '0')}:00`
-);
+const HORARIOS_PARTICIPACION = Array.from({ length: 21 }, (_, index) => {
+  const totalMinutos = 8 * 60 + index * 30;
+  const hora = Math.floor(totalMinutos / 60);
+  const minutos = totalMinutos % 60;
+  return `${String(hora).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+});
 
 function AjustarMapa({ data, circuito = '' }: { data: FeatureCollection | null; circuito?: string }) {
   const map = useMap();
@@ -453,7 +465,14 @@ export default function Elecciones2027() {
   const [votantes, setVotantes] = useState('');
   const [franjaHora, setFranjaHora] = useState('12:00');
   const [franjasGuardadas, setFranjasGuardadas] = useState<Record<string, string>>({});
+  const [franjaEditando, setFranjaEditando] = useState(false);
   const [cargandoFranjas, setCargandoFranjas] = useState(false);
+  const [mesaEditandoElectores, setMesaEditandoElectores] = useState<string | null>(null);
+  const [votantesUltimoRegistro, setVotantesUltimoRegistro] = useState<number | null>(null);
+  const [horaUltimoRegistro, setHoraUltimoRegistro] = useState('');
+  const [escrutinioGuardado, setEscrutinioGuardado] = useState<EscrutinioCargaGuardado | null>(null);
+  const [escrutinioEditando, setEscrutinioEditando] = useState(false);
+  const [escrutinioDeOtraCuenta, setEscrutinioDeOtraCuenta] = useState(false);
   const [votos, setVotos] = useState<Record<string, string>>({});
   const [blancos, setBlancos] = useState('0');
   const [nulos, setNulos] = useState('0');
@@ -1251,7 +1270,7 @@ export default function Elecciones2027() {
 
       if (updateError) {
         if (updateError.code === '42501' || /permission|policy|row-level/i.test(updateError.message)) {
-          throw new Error('Supabase bloqueó la actualización por permisos. Primero hay que habilitar la política segura de actualización de electores para responsables.');
+          throw new Error('Supabase bloqueó la actualización por permisos. Revisá la política segura de electores para responsables.');
         }
         throw updateError;
       }
@@ -1262,6 +1281,7 @@ export default function Elecciones2027() {
         : item
       ));
       setElectoresPorMesa((actuales) => ({ ...actuales, [mesa.id]: String(cantidad) }));
+      setMesaEditandoElectores(null);
       await cargarPublico(true);
       setMensaje(`Se guardaron ${cantidad.toLocaleString('es-AR')} electores habilitados para la Mesa ${mesa.numero}.`);
     } catch (err) {
@@ -1272,10 +1292,11 @@ export default function Elecciones2027() {
   };
 
   const abrirCarga = async (mesa: Mesa, tipo: 'participacion' | 'escrutinio') => {
-    if (tipo === 'participacion' && (!Number.isInteger(mesa.electores_habilitados) || mesa.electores_habilitados < 1)) {
+    if (!Number.isInteger(mesa.electores_habilitados) || mesa.electores_habilitados < 1) {
       setMensaje(`Primero informá y guardá los electores habilitados de la Mesa ${mesa.numero}.`);
       return;
     }
+
     setMesaActiva(mesa);
     setTipoCarga(tipo);
     setMensaje('');
@@ -1284,113 +1305,167 @@ export default function Elecciones2027() {
     setNulos('0');
     setFranjasGuardadas({});
     setFranjaHora(HORARIOS_PARTICIPACION[0]);
+    setFranjaEditando(false);
     setVotantes('');
+    setVotantesUltimoRegistro(null);
+    setHoraUltimoRegistro('');
+    setEscrutinioGuardado(null);
+    setEscrutinioEditando(false);
+    setEscrutinioDeOtraCuenta(false);
+    setCargandoFranjas(true);
 
-    if (tipo === 'participacion') {
-      setCargandoFranjas(true);
-      try {
-        const { data, error: consultaError } = await supabase
-          .from('elecciones_reportes_participacion')
-          .select('id,elecciones_participacion_franjas(hora,votantes)')
+    try {
+      const { data: reporteParticipacion, error: consultaError } = await supabase
+        .from('elecciones_reportes_participacion')
+        .select('id,user_id,estado,elecciones_participacion_franjas(id,hora,votantes)')
+        .eq('mesa_id', mesa.id)
+        .maybeSingle();
+      if (consultaError) throw consultaError;
+
+      const filas = Array.isArray(reporteParticipacion?.elecciones_participacion_franjas)
+        ? reporteParticipacion.elecciones_participacion_franjas
+        : [];
+      const guardadas: Record<string, string> = {};
+      for (const fila of filas as Array<{ hora: string; votantes: number }>) {
+        const hora = String(fila.hora ?? '').slice(0, 5);
+        if (HORARIOS_PARTICIPACION.includes(hora)) guardadas[hora] = String(fila.votantes ?? 0);
+      }
+      setFranjasGuardadas(guardadas);
+
+      const horasGuardadas = HORARIOS_PARTICIPACION.filter((hora) => guardadas[hora] !== undefined);
+      const ultimoHorario = horasGuardadas.at(-1) ?? '';
+      setHoraUltimoRegistro(ultimoHorario);
+      setVotantesUltimoRegistro(ultimoHorario ? Number(guardadas[ultimoHorario]) : null);
+
+      const primeraFranjaPendiente = HORARIOS_PARTICIPACION.find((hora) => guardadas[hora] === undefined);
+      const franjaInicial = primeraFranjaPendiente ?? (ultimoHorario || HORARIOS_PARTICIPACION[0]);
+      setFranjaHora(franjaInicial);
+      setVotantes(guardadas[franjaInicial] ?? '');
+      setFranjaEditando(false);
+
+      if (tipo === 'escrutinio') {
+        const { data: reporte, error: escrutinioError } = await supabase
+          .from('elecciones_reportes_escrutinio')
+          .select('id,user_id,estado,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(partido_id,votos)')
           .eq('mesa_id', mesa.id)
           .maybeSingle();
-        if (consultaError) throw consultaError;
+        if (escrutinioError) throw escrutinioError;
 
-        const filas = Array.isArray(data?.elecciones_participacion_franjas)
-          ? data.elecciones_participacion_franjas
-          : [];
-        const guardadas: Record<string, string> = {};
-        for (const fila of filas as Array<{ hora: string; votantes: number }>) {
-          const hora = String(fila.hora ?? '').slice(0, 5);
-          if (HORARIOS_PARTICIPACION.includes(hora)) guardadas[hora] = String(fila.votantes ?? 0);
+        if (reporte) {
+          const votosGuardados = Object.fromEntries(
+            (reporte.elecciones_escrutinio_partidos ?? []).map((fila: any) => [
+              String(fila.partido_id),
+              Number(fila.votos ?? 0),
+            ])
+          );
+          const registro: EscrutinioCargaGuardado = {
+            id: reporte.id,
+            user_id: reporte.user_id,
+            estado: reporte.estado,
+            votos_partidos: votosGuardados,
+            votos_blancos: Number(reporte.votos_blancos ?? 0),
+            votos_nulos: Number(reporte.votos_nulos ?? 0),
+          };
+          setEscrutinioGuardado(registro);
+          setEscrutinioDeOtraCuenta(reporte.user_id !== perfil?.user_id);
+          setVotos(Object.fromEntries(Object.entries(votosGuardados).map(([id, cantidad]) => [id, String(cantidad)])));
+          setBlancos(String(registro.votos_blancos));
+          setNulos(String(registro.votos_nulos));
+        } else {
+          setEscrutinioEditando(true);
         }
-        setFranjasGuardadas(guardadas);
-        const horariosConDato = HORARIOS_PARTICIPACION.filter((hora) => guardadas[hora] !== undefined);
-        const ultimoHorario = horariosConDato.length
-          ? horariosConDato[horariosConDato.length - 1]
-          : HORARIOS_PARTICIPACION[0];
-        setFranjaHora(ultimoHorario);
-        setVotantes(guardadas[ultimoHorario] ?? '');
-      } catch (err) {
-        setMensaje(err instanceof Error ? `No se pudieron recuperar los registros horarios: ${err.message}` : 'No se pudieron recuperar los registros horarios.');
-      } finally {
-        setCargandoFranjas(false);
       }
+    } catch (err) {
+      setMensaje(err instanceof Error
+        ? `No se pudieron recuperar los datos guardados: ${err.message}`
+        : 'No se pudieron recuperar los datos guardados.');
+    } finally {
+      setCargandoFranjas(false);
     }
   };
 
   const seleccionarFranja = (hora: string) => {
+    const guardado = franjasGuardadas[hora] !== undefined;
+    const primeraFranjaPendiente = HORARIOS_PARTICIPACION.find((item) => franjasGuardadas[item] === undefined);
+    if (!guardado && hora !== primeraFranjaPendiente) return;
+
     setFranjaHora(hora);
-    setVotantes(franjasGuardadas[hora] ?? '');
+    setFranjaEditando(guardado);
+    setVotantes(guardado ? franjasGuardadas[hora] : '');
     setMensaje('');
   };
 
   const enviarParticipacion = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!mesaActiva || !perfil) return;
+
     const cantidad = Number(votantes);
     const electoresHabilitados = Number(mesaActiva.electores_habilitados || 0);
-    if (!Number.isInteger(cantidad) || cantidad < 0 || cantidad > electoresHabilitados) {
+    if (!votantes.trim() || !Number.isSafeInteger(cantidad) || cantidad < 0 || cantidad > electoresHabilitados) {
       setMensaje(`La cantidad debe ser un número entero entre 0 y ${electoresHabilitados} electores.`);
       return;
     }
-    if (!HORARIOS_PARTICIPACION.includes(franjaHora)) {
+
+    const indiceHora = HORARIOS_PARTICIPACION.indexOf(franjaHora);
+    if (indiceHora < 0) {
       setMensaje('Seleccioná un horario válido entre las 08:00 y las 18:00.');
+      return;
+    }
+    const horaPrevia = indiceHora > 0 ? HORARIOS_PARTICIPACION[indiceHora - 1] : '';
+    const horaSiguiente = indiceHora < HORARIOS_PARTICIPACION.length - 1 ? HORARIOS_PARTICIPACION[indiceHora + 1] : '';
+    const acumuladoPrevio = horaPrevia && franjasGuardadas[horaPrevia] !== undefined ? Number(franjasGuardadas[horaPrevia]) : null;
+    const acumuladoSiguiente = horaSiguiente && franjasGuardadas[horaSiguiente] !== undefined ? Number(franjasGuardadas[horaSiguiente]) : null;
+
+    if (acumuladoPrevio !== null && cantidad < acumuladoPrevio) {
+      setMensaje(`El acumulado de las ${franjaHora} no puede ser menor al de las ${horaPrevia} (${acumuladoPrevio} votantes).`);
+      return;
+    }
+    if (acumuladoSiguiente !== null && cantidad > acumuladoSiguiente) {
+      setMensaje(`El acumulado de las ${franjaHora} no puede superar al de las ${horaSiguiente} (${acumuladoSiguiente} votantes).`);
+      return;
+    }
+    if (!franjaEditando && indiceHora > 0 && acumuladoPrevio === null) {
+      setMensaje(`Primero guardá la franja anterior de las ${horaPrevia}.`);
       return;
     }
 
     setCargando(true);
     setMensaje('');
     try {
-      // No se vuelve a poner el reporte en 'pendiente' cuando ya existe.
-      // Si fue publicado, las correcciones horarias conservan ese estado y
-      // se reflejan directamente en los porcentajes públicos.
-      const { data: reporteExistente, error: consultaReporteError } = await supabase
-        .from('elecciones_reportes_participacion')
-        .select('id,user_id,estado')
-        .eq('mesa_id', mesaActiva.id)
-        .maybeSingle();
-      if (consultaReporteError) throw consultaReporteError;
+      const { data, error } = await supabase.rpc('guardar_participacion_franja_responsable', {
+        p_mesa_id: mesaActiva.id,
+        p_hora: `${franjaHora}:00`,
+        p_votantes: cantidad,
+      });
+      if (error) throw error;
+      const resultado = data as unknown as {
+        success: boolean;
+        estado_reporte?: string;
+        porcentaje?: number;
+        mensaje?: string;
+      };
+      if (!resultado?.success) throw new Error('Supabase no confirmó el guardado de la participación.');
 
-      let reporteId: string;
-      let estadoReporte: string;
-      if (reporteExistente) {
-        if (reporteExistente.user_id !== perfil.user_id) {
-          throw new Error('Esta mesa ya tiene un reporte asociado a otro usuario. Pedile al Administrador General que revise la asignación.');
-        }
-        reporteId = reporteExistente.id;
-        estadoReporte = reporteExistente.estado;
+      const guardadasActualizadas = { ...franjasGuardadas, [franjaHora]: String(cantidad) };
+      setFranjasGuardadas(guardadasActualizadas);
+      setFranjaEditando(false);
+
+      const primeraPendiente = HORARIOS_PARTICIPACION.find((hora) => guardadasActualizadas[hora] === undefined);
+      if (primeraPendiente) {
+        setFranjaHora(primeraPendiente);
+        setVotantes('');
       } else {
-        const { data: nuevoReporte, error: nuevoReporteError } = await supabase
-          .from('elecciones_reportes_participacion')
-          .insert({ mesa_id: mesaActiva.id, user_id: perfil.user_id, estado: 'pendiente' })
-          .select('id,estado')
-          .single();
-        if (nuevoReporteError) throw nuevoReporteError;
-        reporteId = nuevoReporte.id;
-        estadoReporte = nuevoReporte.estado;
+        setHoraUltimoRegistro(franjaHora);
+        setVotantesUltimoRegistro(cantidad);
       }
 
-      const yaExistiaLaFranja = franjasGuardadas[franjaHora] !== undefined;
-      const { error: franjaError } = await supabase
-        .from('elecciones_participacion_franjas')
-        .upsert(
-          { reporte_id: reporteId, hora: franjaHora, votantes: cantidad },
-          { onConflict: 'reporte_id,hora' },
-        );
-      if (franjaError) throw franjaError;
-
-      setFranjasGuardadas((actuales) => ({ ...actuales, [franjaHora]: String(cantidad) }));
-      const porcentaje = electoresHabilitados > 0
-        ? Math.round((cantidad / electoresHabilitados) * 100)
-        : 0;
-      const accion = yaExistiaLaFranja ? 'actualizado' : 'guardado';
-      const seguimiento = estadoReporte === 'publicado'
-        ? 'La corrección ya se refleja en los datos publicados.'
-        : 'El registro quedó enviado para revisión de la administración.';
-      setMensaje(`Registro de las ${franjaHora} ${accion}. ${cantidad.toLocaleString('es-AR')} de ${electoresHabilitados.toLocaleString('es-AR')} electores (${porcentaje}%). ${seguimiento}`);
+      const ultimaHoraActual = HORARIOS_PARTICIPACION.filter((hora) => guardadasActualizadas[hora] !== undefined).at(-1) ?? '';
+      setHoraUltimoRegistro(ultimaHoraActual);
+      setVotantesUltimoRegistro(ultimaHoraActual ? Number(guardadasActualizadas[ultimaHoraActual]) : null);
+      setMensaje(resultado.mensaje || `Se guardó el acumulado de las ${franjaHora}.`);
+      await cargarPublico(true);
     } catch (err) {
-      setMensaje(err instanceof Error ? `No se pudo guardar la participación: ${err.message}` : 'No se pudo guardar la participación.');
+      setMensaje(`No se pudo guardar la participación: ${textoError(err, 'Error de guardado.')}`);
     } finally {
       setCargando(false);
     }
@@ -1399,37 +1474,80 @@ export default function Elecciones2027() {
   const enviarEscrutinio = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (!mesaActiva || !perfil) return;
-    setCargando(true); setMensaje('');
-    try {
-      const { data: reporte, error: repError } = await supabase
-        .from('elecciones_reportes_escrutinio')
-        .upsert({
-          mesa_id: mesaActiva.id,
-          user_id: perfil.user_id,
-          estado: 'pendiente',
-          votos_blancos: Number(blancos || 0),
-          votos_nulos: Number(nulos || 0),
-        }, { onConflict: 'mesa_id' })
-        .select('id').single();
-      if (repError) throw repError;
-      const filas = partidos.map((p) => ({
-        reporte_id: reporte.id,
-        partido_id: p.id,
-        votos: Math.max(0, Number(votos[p.id] || 0)),
-      }));
-      if (filas.length) {
-        const { error: votosError } = await supabase
-          .from('elecciones_escrutinio_partidos')
-          .upsert(filas, { onConflict: 'reporte_id,partido_id' });
-        if (votosError) throw votosError;
-      }
-      setMensaje('Escrutinio enviado para revisión de la administración central.');
-      setMesaActiva(null); setTipoCarga(null);
-      await cargarPublico(true);
-    } catch (err) { setMensaje(`No se pudo enviar el escrutinio: ${textoError(err, 'Error de guardado.')}`); }
-    finally { setCargando(false); }
-  };
+    if (votantesUltimoRegistro === null) {
+      setMensaje('Primero cargá al menos una franja de participación para esta mesa.');
+      return;
+    }
+    if (escrutinioDeOtraCuenta) {
+      setMensaje('Este escrutinio pertenece a otra cuenta. Pedile al Administrador General que revise la asignación.');
+      return;
+    }
 
+    const filas = partidos.map((partido) => ({
+      partido_id: partido.id,
+      votos: Number(votos[partido.id] ?? ''),
+    }));
+    if (filas.some((fila) => !Number.isSafeInteger(fila.votos) || fila.votos < 0)) {
+      setMensaje('Ingresá una cantidad entera e igual o mayor que cero para cada partido.');
+      return;
+    }
+    const votosPartidos = filas.reduce((total, fila) => total + fila.votos, 0);
+    const cantidadBlancos = Number(blancos || 0);
+    const cantidadNulos = Number(nulos || 0);
+    if (!Number.isSafeInteger(cantidadBlancos) || cantidadBlancos < 0 || !Number.isSafeInteger(cantidadNulos) || cantidadNulos < 0) {
+      setMensaje('Los votos en blanco y nulos deben ser números enteros iguales o mayores que cero.');
+      return;
+    }
+    if (votosPartidos > votantesUltimoRegistro) {
+      setMensaje(`La suma de votos de los partidos (${votosPartidos}) supera los ${votantesUltimoRegistro} votantes registrados en la mesa.`);
+      return;
+    }
+    if (votosPartidos + cantidadBlancos + cantidadNulos > votantesUltimoRegistro) {
+      setMensaje(`La suma total de votos (${votosPartidos + cantidadBlancos + cantidadNulos}) supera los ${votantesUltimoRegistro} votantes registrados en la mesa.`);
+      return;
+    }
+
+    setCargando(true);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.rpc('guardar_escrutinio_responsable', {
+        p_mesa_id: mesaActiva.id,
+        p_votos: filas,
+        p_votos_blancos: cantidadBlancos,
+        p_votos_nulos: cantidadNulos,
+      });
+      if (error) throw error;
+      const resultado = data as unknown as {
+        success: boolean;
+        reporte_id: string;
+        estado: string;
+        mensaje?: string;
+      };
+      if (!resultado?.success || !resultado.reporte_id) {
+        throw new Error('Supabase no confirmó el guardado del escrutinio.');
+      }
+
+      const registro: EscrutinioCargaGuardado = {
+        id: resultado.reporte_id,
+        user_id: perfil.user_id,
+        estado: resultado.estado || 'pendiente',
+        votos_partidos: Object.fromEntries(filas.map((fila) => [fila.partido_id, fila.votos])),
+        votos_blancos: cantidadBlancos,
+        votos_nulos: cantidadNulos,
+      };
+      setEscrutinioGuardado(registro);
+      setEscrutinioEditando(false);
+      setVotos(Object.fromEntries(filas.map((fila) => [fila.partido_id, String(fila.votos)])));
+      setBlancos(String(cantidadBlancos));
+      setNulos(String(cantidadNulos));
+      setMensaje(resultado.mensaje || 'El escrutinio quedó guardado y enviado a revisión.');
+      await cargarPublico(true);
+    } catch (err) {
+      setMensaje(`No se pudo guardar el escrutinio: ${textoError(err, 'Error de guardado.')}`);
+    } finally {
+      setCargando(false);
+    }
+  };
   const participacionPublicaPorMesa = useMemo(() => {
     const mapa = new Map<string, ParticipacionPublicaMesa>();
     for (const reporte of reportesParticipacionPublicos) {
@@ -1652,12 +1770,20 @@ export default function Elecciones2027() {
   const colegioPorId = useMemo(() => Object.fromEntries(colegios.map((c) => [c.id, c])), [colegios]);
   const electoresMesaActiva = Number(mesaActiva?.electores_habilitados || 0);
   const ultimoHorarioGuardado = HORARIOS_PARTICIPACION.filter((hora) => franjasGuardadas[hora] !== undefined).slice(-1)[0] || '';
+  const indiceSiguienteFranja = HORARIOS_PARTICIPACION.findIndex((hora) => franjasGuardadas[hora] === undefined);
+  const indiceFranjaSeleccionada = HORARIOS_PARTICIPACION.indexOf(franjaHora);
+  const horaPreviaSeleccionada = indiceFranjaSeleccionada > 0 ? HORARIOS_PARTICIPACION[indiceFranjaSeleccionada - 1] : '';
+  const acumuladoPreviaSeleccionada = horaPreviaSeleccionada && franjasGuardadas[horaPreviaSeleccionada] !== undefined
+    ? Number(franjasGuardadas[horaPreviaSeleccionada])
+    : null;
   const hayValorEnEdicion = votantes.trim() !== '';
   const votantesActuales = hayValorEnEdicion
     ? Number(votantes)
-    : ultimoHorarioGuardado
-      ? Number(franjasGuardadas[ultimoHorarioGuardado])
-      : 0;
+    : acumuladoPreviaSeleccionada ?? (ultimoHorarioGuardado ? Number(franjasGuardadas[ultimoHorarioGuardado]) : 0);
+  const totalVotosPartidosActual = partidos.reduce((total, partido) => total + (Number(votos[partido.id] || 0) || 0), 0);
+  const totalEscrutinioActual = totalVotosPartidosActual + (Number(blancos || 0) || 0) + (Number(nulos || 0) || 0);
+  const escrutinioSuperaParticipacion = votantesUltimoRegistro !== null
+    && (totalVotosPartidosActual > votantesUltimoRegistro || totalEscrutinioActual > votantesUltimoRegistro);
   const porcentajeParticipacionActual = electoresMesaActiva > 0 && Number.isFinite(votantesActuales)
     ? Math.max(0, Math.min(100, (votantesActuales / electoresMesaActiva) * 100))
     : 0;
