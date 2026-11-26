@@ -68,6 +68,8 @@ type UsuarioAdmin = {
   rol: 'responsable_escuela';
   activo: boolean;
   creado_en?: string | null;
+  reportes_participacion: number;
+  reportes_escrutinio: number;
   colegios: Array<{
     colegio_id: string;
     nombre: string;
@@ -476,6 +478,12 @@ export default function Elecciones2027() {
   const [usuarioMesasEditando, setUsuarioMesasEditando] = useState<string | null>(null);
   const [configuracionMesasUsuario, setConfiguracionMesasUsuario] = useState<Record<string, MesaAdminConfiguracion[]>>({});
   const [guardandoMesasUsuario, setGuardandoMesasUsuario] = useState<string | null>(null);
+  const [usuarioEliminarConfirmando, setUsuarioEliminarConfirmando] = useState<string | null>(null);
+  const [confirmacionEliminarUsuario, setConfirmacionEliminarUsuario] = useState('');
+  const [asignacionEliminarConfirmando, setAsignacionEliminarConfirmando] = useState<string | null>(null);
+  const [mesaEliminarConfirmando, setMesaEliminarConfirmando] = useState<string | null>(null);
+  const [confirmacionEliminarMesa, setConfirmacionEliminarMesa] = useState('');
+  const [eliminandoElemento, setEliminandoElemento] = useState<string | null>(null);
   const [pestanaEscrutinio, setPestanaEscrutinio] = useState<'carga' | 'pendientes' | 'publicados'>('carga');
   const [circuitoDashboard, setCircuitoDashboard] = useState('');
   const [responsableNombre, setResponsableNombre] = useState('');
@@ -670,6 +678,83 @@ export default function Elecciones2027() {
       setMensaje(await textoErrorFuncion(err, 'No se pudo actualizar la configuración de mesas.'));
     } finally {
       setGuardandoMesasUsuario(null);
+    }
+  };
+
+  const quitarAsignacionColegio = async (userId: string, colegioId: string) => {
+    const key = `${userId}:${colegioId}`;
+    setEliminandoElemento(key);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: { action: 'quitar_asignacion_colegio', user_id: userId, colegio_id: colegioId },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo quitar el colegio asignado.');
+      setMensaje(data.mensaje || 'Se quitó la asignación.');
+      setAsignacionEliminarConfirmando(null);
+      await cargarUsuariosAdmin();
+    } catch (err) {
+      setMensaje(await textoErrorFuncion(err, 'No se pudo quitar el colegio asignado.'));
+    } finally {
+      setEliminandoElemento(null);
+    }
+  };
+
+  const eliminarResponsable = async (userId: string) => {
+    if (confirmacionEliminarUsuario !== 'ELIMINAR CUENTA') {
+      setMensaje('Escribí exactamente ELIMINAR CUENTA para confirmar.');
+      return;
+    }
+    setEliminandoElemento(userId);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: {
+          action: 'eliminar_responsable',
+          user_id: userId,
+          confirmacion: confirmacionEliminarUsuario,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo eliminar la cuenta.');
+      setMensaje(data.mensaje || 'Se eliminó la cuenta del responsable.');
+      setUsuarioEliminarConfirmando(null);
+      setConfirmacionEliminarUsuario('');
+      await Promise.all([cargarUsuariosAdmin(), cargarPublico()]);
+    } catch (err) {
+      setMensaje(await textoErrorFuncion(err, 'No se pudo eliminar la cuenta.'));
+    } finally {
+      setEliminandoElemento(null);
+    }
+  };
+
+  const eliminarMesaDePrueba = async (mesaId: string) => {
+    if (confirmacionEliminarMesa !== 'ELIMINAR MESA Y SUS REPORTES') {
+      setMensaje('Escribí exactamente ELIMINAR MESA Y SUS REPORTES para confirmar.');
+      return;
+    }
+    setEliminandoElemento(mesaId);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: {
+          action: 'eliminar_mesa',
+          mesa_id: mesaId,
+          confirmacion: confirmacionEliminarMesa,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo eliminar la mesa.');
+      setMensaje(data.mensaje || 'Se eliminó la mesa y sus reportes asociados.');
+      setMesaEliminarConfirmando(null);
+      setConfirmacionEliminarMesa('');
+      setUsuarioMesasEditando(null);
+      await Promise.all([cargarUsuariosAdmin(), cargarPublico()]);
+    } catch (err) {
+      setMensaje(await textoErrorFuncion(err, 'No se pudo eliminar la mesa.'));
+    } finally {
+      setEliminandoElemento(null);
     }
   };
 
@@ -2501,7 +2586,35 @@ export default function Elecciones2027() {
                               </div>
                               <div className="e27-user-actions-row">
                                 <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioPasswordEditando(usuarioPasswordEditando === usuario.user_id ? null : usuario.user_id); setNuevaPasswordUsuario(''); setConfirmarNuevaPasswordUsuario(''); setMensaje(''); }}>♧ Cambiar contraseña</button>
+                                <button
+                                  type="button"
+                                  className="e27-white-button e27-danger-button"
+                                  onClick={() => {
+                                    setUsuarioEliminarConfirmando(usuarioEliminarConfirmando === usuario.user_id ? null : usuario.user_id);
+                                    setConfirmacionEliminarUsuario('');
+                                    setMensaje('');
+                                  }}
+                                >Eliminar responsable</button>
                               </div>
+                              {usuarioEliminarConfirmando === usuario.user_id && (
+                                <div className="e27-delete-confirm-panel">
+                                  <strong>Eliminar definitivamente a {usuario.nombre || usuario.email}</strong>
+                                  <p>Se borrará su cuenta de acceso y sus reportes de participación y escrutinio. Los colegios y las mesas no se eliminan. Los reportes cargados por otras personas se conservan.</p>
+                                  <p>Esta acción no se puede deshacer. Para confirmar, escribí <b>ELIMINAR CUENTA</b>.</p>
+                                  <label>Confirmación
+                                    <input
+                                      value={confirmacionEliminarUsuario}
+                                      onChange={(e) => setConfirmacionEliminarUsuario(e.target.value)}
+                                      autoComplete="off"
+                                      placeholder="ELIMINAR CUENTA"
+                                    />
+                                  </label>
+                                  <div className="e27-delete-confirm-actions">
+                                    <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioEliminarConfirmando(null); setConfirmacionEliminarUsuario(''); }}>Cancelar</button>
+                                    <button type="button" className="e27-white-button e27-danger-button" disabled={confirmacionEliminarUsuario !== 'ELIMINAR CUENTA' || eliminandoElemento === usuario.user_id} onClick={() => void eliminarResponsable(usuario.user_id)}>{eliminandoElemento === usuario.user_id ? 'Eliminando…' : 'Confirmar eliminación'}</button>
+                                  </div>
+                                </div>
+                              )}
                               {usuarioPasswordEditando === usuario.user_id && (
                                 <form className="e27-user-edit-form" onSubmit={(e) => { e.preventDefault(); void guardarPasswordUsuario(usuario.user_id); }}>
                                   <div className="e27-user-edit-grid">
@@ -2523,6 +2636,23 @@ export default function Elecciones2027() {
                                         <span className="e27-user-circuit">Circuito {colegio.circuito || '—'}</span>
                                         <span className="e27-user-mesas-summary">{colegio.cantidad_mesas} {colegio.cantidad_mesas === 1 ? 'mesa activa' : 'mesas activas'}{colegio.numeros_mesas.length ? ` · N.º ${colegio.numeros_mesas.join(', ')}` : ''}</span>
                                       </div>
+                                      <div className="e27-assignment-actions">
+                                        <button
+                                          type="button"
+                                          className="e27-white-button e27-danger-button e27-white-button-outline"
+                                          onClick={() => setAsignacionEliminarConfirmando(asignacionEliminarConfirmando === key ? null : key)}
+                                        >Quitar colegio de esta cuenta</button>
+                                      </div>
+                                      {asignacionEliminarConfirmando === key && (
+                                        <div className="e27-delete-confirm-panel e27-assignment-confirm-panel">
+                                          <strong>Quitar asignación de {colegio.nombre}</strong>
+                                          <p>La persona dejará de tener este colegio asignado. El colegio, sus mesas y todos sus reportes permanecen en el Observatorio. Esta acción no elimina datos electorales.</p>
+                                          <div className="e27-delete-confirm-actions">
+                                            <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setAsignacionEliminarConfirmando(null)}>Cancelar</button>
+                                            <button type="button" className="e27-white-button e27-danger-button" disabled={eliminandoElemento === key} onClick={() => void quitarAsignacionColegio(usuario.user_id, colegio.colegio_id)}>{eliminandoElemento === key ? 'Quitando…' : 'Confirmar y quitar'}</button>
+                                          </div>
+                                        </div>
+                                      )}
                                       {usuarioMesasEditando === key ? (
                                         <form className="e27-user-mesas-form e27-user-mesas-config-form" onSubmit={(e) => { e.preventDefault(); void guardarConfiguracionMesasDeUsuario(usuario.user_id, colegio.colegio_id); }}>
                                           <div className="e27-user-mesas-form-heading">
@@ -2553,18 +2683,41 @@ export default function Elecciones2027() {
                                                     ? `Con historial: ${mesa.reportes_total} reporte(s). Se puede renumerar, no quitar.`
                                                     : mesa.id ? 'Existente · sin reportes' : 'Mesa nueva'}
                                                 </span>
-                                                <button
-                                                  type="button"
-                                                  className="e27-white-button e27-white-button-outline e27-remove-mesa-button"
-                                                  disabled={mesa.reportes_total > 0}
-                                                  title={mesa.reportes_total > 0 ? 'Esta mesa tiene reportes asociados. Podés cambiar su número, pero no quitarla.' : 'Quitar esta mesa'}
-                                                  onClick={() => setConfiguracionMesasUsuario((old) => ({
-                                                    ...old,
-                                                    [key]: (old[key] ?? []).filter((_, itemIndex) => itemIndex !== index),
-                                                  }))}
-                                                  aria-label={`Quitar mesa ${mesa.numero}`}
-                                                >{mesa.reportes_total > 0 ? 'Protegida' : 'Quitar'}</button>
+                                                {mesa.id ? (
+                                                  <button
+                                                    type="button"
+                                                    className="e27-white-button e27-danger-button e27-remove-mesa-button"
+                                                    onClick={() => {
+                                                      setMesaEliminarConfirmando(mesaEliminarConfirmando === mesa.id ? null : mesa.id);
+                                                      setConfirmacionEliminarMesa('');
+                                                    }}
+                                                  >Eliminar</button>
+                                                ) : (
+                                                  <button
+                                                    type="button"
+                                                    className="e27-white-button e27-white-button-outline e27-remove-mesa-button"
+                                                    onClick={() => setConfiguracionMesasUsuario((old) => ({
+                                                      ...old,
+                                                      [key]: (old[key] ?? []).filter((_, itemIndex) => itemIndex !== index),
+                                                    }))}
+                                                    aria-label={`Quitar mesa nueva ${mesa.numero}`}
+                                                  >Quitar</button>
+                                                )}
                                               </div>
+                                              {mesa.id && mesaEliminarConfirmando === mesa.id && (
+                                                <div className="e27-delete-confirm-panel e27-mesa-delete-confirm">
+                                                  <strong>Eliminar definitivamente la Mesa {mesa.numero}</strong>
+                                                  <p>Se eliminarán la mesa y sus reportes de participación y escrutinio, incluidos los votos y las franjas horarias asociados. Esto afecta a todas las personas asignadas al colegio. El historial general de auditoría se conserva.</p>
+                                                  <p>Escribí <b>ELIMINAR MESA Y SUS REPORTES</b> para confirmar.</p>
+                                                  <label>Confirmación
+                                                    <input value={confirmacionEliminarMesa} onChange={(e) => setConfirmacionEliminarMesa(e.target.value)} placeholder="ELIMINAR MESA Y SUS REPORTES" autoComplete="off" />
+                                                  </label>
+                                                  <div className="e27-delete-confirm-actions">
+                                                    <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setMesaEliminarConfirmando(null); setConfirmacionEliminarMesa(''); }}>Cancelar</button>
+                                                    <button type="button" className="e27-white-button e27-danger-button" disabled={confirmacionEliminarMesa !== 'ELIMINAR MESA Y SUS REPORTES' || eliminandoElemento === mesa.id} onClick={() => void eliminarMesaDePrueba(mesa.id!)}>{eliminandoElemento === mesa.id ? 'Eliminando…' : 'Confirmar eliminación'}</button>
+                                                  </div>
+                                                </div>
+                                              )}
                                             ))}
                                           </div>
                                           <button
