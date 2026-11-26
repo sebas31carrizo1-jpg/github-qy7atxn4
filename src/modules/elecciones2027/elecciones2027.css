@@ -3635,3 +3635,95 @@
     flex:1 1 130px;
   }
 }
+
+
+/* Acciones destructivas de administración: diferenciadas y con confirmación visible. */
+.e27-danger-button {
+  border:1px solid #e0a3a3 !important;
+  background:#fff1f1 !important;
+  color:#9d3030 !important;
+}
+.e27-danger-button:hover:not(:disabled) {
+  border-color:#c76c6c !important;
+  background:#ffe5e5 !important;
+  color:#852222 !important;
+}
+.e27-danger-button:disabled {
+  opacity:.48;
+  cursor:not-allowed;
+}
+.e27-assignment-actions {
+  display:flex;
+  justify-content:flex-start;
+  margin-top:10px;
+}
+.e27-delete-confirm-panel {
+  display:grid;
+  gap:10px;
+  width:100%;
+  box-sizing:border-box;
+  margin:12px 0 16px;
+  padding:16px;
+  border:1px solid #e7b4b4;
+  border-radius:12px;
+  background:#fff7f7;
+  color:#673a3a;
+}
+.e27-delete-confirm-panel > strong {
+  color:#8c2929;
+  font-size:15px;
+  line-height:1.4;
+}
+.e27-delete-confirm-panel p {
+  margin:0;
+  color:#714d4d;
+  font-size:13px;
+  line-height:1.55;
+}
+.e27-delete-confirm-panel label {
+  display:grid;
+  gap:6px;
+  color:#713737;
+  font-size:12px;
+  font-weight:750;
+}
+.e27-delete-confirm-panel input {
+  width:100%;
+  min-height:44px;
+  box-sizing:border-box;
+  padding:10px 12px;
+  border:1px solid #d8a4a4;
+  border-radius:8px;
+  background:#fff;
+  color:#492424;
+  font:inherit;
+  font-size:14px;
+}
+.e27-delete-confirm-actions {
+  display:flex;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+  gap:9px;
+  padding-top:4px;
+}
+.e27-delete-confirm-actions button {
+  min-height:40px;
+}
+.e27-mesa-delete-confirm {
+  grid-column:1/-1;
+}
+.e27-assignment-confirm-panel {
+  margin-top:8px;
+}
+@media(max-width:560px) {
+  .e27-assignment-actions > button {
+    width:100%;
+  }
+  .e27-delete-confirm-actions {
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  .e27-delete-confirm-actions button {
+    width:100%;
+  }
+}
