@@ -118,6 +118,15 @@ type DatoCircuito = {
   votos?: number;
 };
 
+type ResultadoGanadorColegio = {
+  partido_id: string;
+  partido: string;
+  color: string;
+  votos: number;
+  porcentaje: number;
+  total_escrutado: number;
+};
+
 const municipioUrl = `${import.meta.env.BASE_URL}la-matanza-municipio.geojson`;
 
 // Catálogo inicial de los 25 circuitos electorales de La Matanza.
@@ -254,40 +263,70 @@ function CentrarPoligonoColegio({
   return null;
 }
 
+function colorGanadorPorIntensidad(color: string, porcentaje: number) {
+  const hex = /^#([0-9a-f]{6})$/i.test(color) ? color.slice(1) : '168eae';
+  const rgb = [0, 2, 4].map((pos) => parseInt(hex.slice(pos, pos + 2), 16));
+  const intensidad = Math.max(0, Math.min(100, porcentaje)) / 100;
+  // El tono crece con el porcentaje: una victoria ajustada queda clara y una
+  // victoria amplia se acerca al color pleno del partido.
+  const proporcionColor = 0.18 + intensidad * 0.82;
+  const resultado = rgb.map((canal) => Math.round(255 - (255 - canal) * proporcionColor));
+  return `#${resultado.map((canal) => canal.toString(16).padStart(2, '0')).join('')}`;
+}
+
 function MapaColegios({
   data,
   colegioSeleccionado,
+  resultados,
   onSeleccionar,
 }: {
   data: FeatureCollection | null;
   colegioSeleccionado?: string;
+  resultados: Record<string, ResultadoGanadorColegio>;
   onSeleccionar: (nombre: string) => void;
 }) {
   if (!data) return <div className="e27-map-loading">Cargando los polígonos de colegios…</div>;
   const seleccionado = normalizarNombreColegio(colegioSeleccionado || '');
+  const firmaResultados = Object.entries(resultados)
+    .map(([key, resultado]) => `${key}:${resultado.partido_id}:${resultado.porcentaje.toFixed(2)}`)
+    .join('|');
 
   return (
     <MapContainer center={[-34.75, -58.62]} zoom={10} scrollWheelZoom className="e27-map e27-map-college-only">
       <AjustarMapa data={data} />
       <CentrarPoligonoColegio data={data} colegioSeleccionado={colegioSeleccionado} />
       <GeoJSON
+        key={firmaResultados}
         data={data as never}
         style={(feature) => {
           const name = String((feature?.properties as any)?.nombre || '');
-          const isSelected = Boolean(seleccionado) && normalizarNombreColegio(name) === seleccionado;
+          const llave = normalizarNombreColegio(name);
+          const isSelected = Boolean(seleccionado) && llave === seleccionado;
+          const resultado = resultados[llave];
+          const fillColor = resultado
+            ? colorGanadorPorIntensidad(resultado.color, resultado.porcentaje)
+            : '#f7fafc';
           return {
-            color: isSelected ? '#087f9f' : '#a8b7c2',
-            weight: isSelected ? 1.45 : 0.7,
-            fillColor: isSelected ? '#65c9e2' : '#f7fafc',
-            fillOpacity: isSelected ? 0.48 : 0.34,
+            color: isSelected ? '#087f9f' : resultado ? resultado.color : '#a8b7c2',
+            weight: isSelected ? 2.4 : resultado ? 1.05 : 0.7,
+            fillColor: isSelected && resultado ? colorGanadorPorIntensidad(resultado.color, Math.max(resultado.porcentaje, 55)) : isSelected ? '#b8e9f4' : fillColor,
+            fillOpacity: resultado ? 0.86 : isSelected ? 0.62 : 0.34,
             opacity: 1,
             interactive: true,
-            className: isSelected ? 'e27-college-polygon e27-college-polygon-selected' : 'e27-college-polygon',
+            className: isSelected
+              ? 'e27-college-polygon e27-college-polygon-selected'
+              : resultado
+                ? 'e27-college-polygon e27-college-polygon-with-results'
+                : 'e27-college-polygon',
           };
         }}
         onEachFeature={(feature, layer) => {
           const name = String((feature.properties as any)?.nombre || 'Colegio');
-          layer.bindTooltip(`${name}<br/><small>Hacé clic para seleccionar este establecimiento</small>`, {
+          const resultado = resultados[normalizarNombreColegio(name)];
+          const detalle = resultado
+            ? `<strong>${resultado.partido}</strong><br/>${resultado.porcentaje.toFixed(1)}% · ${numeroAR(resultado.votos)} votos`
+            : 'Sin escrutinio publicado';
+          layer.bindTooltip(`<strong>${name}</strong><br/>${detalle}<br/><small>Hacé clic para consultar el establecimiento</small>`, {
             sticky: true,
             className: 'e27-college-tooltip',
           });
@@ -1729,6 +1768,62 @@ export default function Elecciones2027() {
   const totalVotosEscrutadosColegio =
     totalVotosColegio + votosBlancosColegio + votosNulosColegio;
 
+  // Ganador y porcentaje por establecimiento para colorear cada polígono KML.
+  // El denominador incluye votos partidarios, blancos y nulos, igual que la
+  // distribución que ve el usuario en el panel del colegio.
+  const resultadosPorColegio = useMemo(() => {
+    const resultados: Record<string, ResultadoGanadorColegio> = {};
+
+    for (const colegio of colegiosPublicos) {
+      const mesasColegio = mesasPublicas.filter((mesa) => mesa.colegio_id === colegio.id);
+      const acumulados = new Map<string, { partido_id: string; partido: string; color: string; votos: number }>();
+      let blancos = 0;
+      let nulos = 0;
+
+      for (const mesa of mesasColegio) {
+        const escrutinio = escrutinioPublicoPorMesa.get(mesa.id);
+        if (!escrutinio) continue;
+        blancos += escrutinio.votos_blancos;
+        nulos += escrutinio.votos_nulos;
+
+        for (const fila of escrutinio.partidos) {
+          const actual = acumulados.get(fila.partido_id);
+          if (actual) actual.votos += fila.votos;
+          else acumulados.set(fila.partido_id, {
+            partido_id: fila.partido_id,
+            partido: fila.nombre,
+            color: fila.color,
+            votos: fila.votos,
+          });
+        }
+      }
+
+      const lista = Array.from(acumulados.values()).sort((a, b) => b.votos - a.votos);
+      const ganador = lista[0];
+      const votosPartidarios = lista.reduce((total, item) => total + item.votos, 0);
+      const totalEscrutado = votosPartidarios + blancos + nulos;
+      if (!ganador || totalEscrutado <= 0 || ganador.votos <= 0) continue;
+
+      const resultado: ResultadoGanadorColegio = {
+        ...ganador,
+        porcentaje: (ganador.votos / totalEscrutado) * 100,
+        total_escrutado: totalEscrutado,
+      };
+
+      const identificadores = [
+        colegio.identificador_kml,
+        colegio.nombre_normalizado,
+        colegio.nombre,
+      ];
+      for (const identificador of identificadores) {
+        const llave = normalizarNombreColegio(String(identificador || ''));
+        if (llave) resultados[llave] = resultado;
+      }
+    }
+
+    return resultados;
+  }, [colegiosPublicos, mesasPublicas, escrutinioPublicoPorMesa]);
+
   const mesasActivasMunicipio = mesasPublicas;
   const votantesMunicipio = mesasActivasMunicipio.reduce((total, mesa) => total + (participacionPublicaPorMesa.get(mesa.id)?.votantes || 0), 0);
   const habilitadosMunicipio = mesasActivasMunicipio.reduce((total, mesa) => total + Number(mesa.electores_habilitados || 0), 0);
@@ -1954,8 +2049,18 @@ export default function Elecciones2027() {
                     </div>
                   </div>
                 </div>
-                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} colegioSeleccionado={colegioPublicoActivo?.identificador_kml || colegioPublicoActivo?.nombre_normalizado || colegioPublicoActivo?.nombre || colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
+                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} resultados={resultadosPorColegio} colegioSeleccionado={colegioPublicoActivo?.identificador_kml || colegioPublicoActivo?.nombre_normalizado || colegioPublicoActivo?.nombre || colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
                 <div className="e27-map-foot">{colegiosKml?.features.length ?? '—'} polígonos de establecimientos · La capa de circuitos está excluida</div>
+                <div className="e27-college-map-legend">
+                  <div className="e27-college-map-legend-parties">
+                    <strong>Partido ganador por colegio</strong>
+                    {partidos.filter((partido) => Object.values(resultadosPorColegio).some((resultado) => resultado.partido_id === partido.id)).map((partido) => (
+                      <span key={partido.id}><i style={{ background: partido.color }} />{partido.nombre}</span>
+                    ))}
+                    {!Object.keys(resultadosPorColegio).length && <small>Los polígonos se colorearán cuando haya escrutinios publicados.</small>}
+                  </div>
+                  <small className="e27-college-map-strength">Color más claro = menor porcentaje · Color más intenso = mayor porcentaje</small>
+                </div>
               </section>
               <aside
                 className="e27-panel e27-public-summary-panel"
@@ -2530,16 +2635,17 @@ export default function Elecciones2027() {
                         {avanceCierrePorCircuito.map((item) => (
                           <article className="e27-circuit-closure-card" key={item.codigo}>
                             <div className="e27-circuit-closure-top">
-                              <strong>{item.codigo}</strong>
-                              <b>{item.total ? `${item.porcentaje.toFixed(0)}%` : '—'}</b>
+                              <strong>Circuito {item.codigo}</strong>
+                              <b>{item.porcentaje.toFixed(0)}%</b>
                             </div>
-                            <div className="e27-circuit-closure-track">
-                              <span style={{ width: `${item.porcentaje}%` }} />
+                            <div className="e27-circuit-closure-track" role="progressbar" aria-label={`Avance del circuito ${item.codigo}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(item.porcentaje)}>
+                              <span style={{ width: `${Math.max(0, Math.min(100, item.porcentaje))}%` }} />
                             </div>
+                            <div className="e27-circuit-closure-scale"><span>0</span><span>100</span></div>
                             <small>
                               {item.total
-                                ? `${item.cerradas} / ${item.total} mesas cerradas`
-                                : 'Sin mesas configuradas'}
+                                ? `${item.cerradas} de ${item.total} mesas cerradas`
+                                : '0 de 0 mesas · Sin mesas configuradas'}
                             </small>
                           </article>
                         ))}
