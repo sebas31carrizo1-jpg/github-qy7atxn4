@@ -55,6 +55,11 @@ type MesaConfiguracion = {
   numero: string;
 };
 
+type MesaAdminConfiguracion = {
+  id: string | null;
+  numero: string;
+};
+
 type UsuarioAdmin = {
   user_id: string;
   email: string;
@@ -67,6 +72,7 @@ type UsuarioAdmin = {
     nombre: string;
     circuito: string | null;
     activo: boolean;
+    mesas: Array<{ id: string; numero: number }>;
     numeros_mesas: number[];
     cantidad_mesas: number;
   }> ;
@@ -467,7 +473,7 @@ export default function Elecciones2027() {
   const [confirmarNuevaPasswordUsuario, setConfirmarNuevaPasswordUsuario] = useState('');
   const [guardandoPasswordUsuario, setGuardandoPasswordUsuario] = useState<string | null>(null);
   const [usuarioMesasEditando, setUsuarioMesasEditando] = useState<string | null>(null);
-  const [cantidadMesasUsuario, setCantidadMesasUsuario] = useState<Record<string, string>>({});
+  const [configuracionMesasUsuario, setConfiguracionMesasUsuario] = useState<Record<string, MesaAdminConfiguracion[]>>({});
   const [guardandoMesasUsuario, setGuardandoMesasUsuario] = useState<string | null>(null);
   const [pestanaEscrutinio, setPestanaEscrutinio] = useState<'carga' | 'pendientes' | 'publicados'>('carga');
   const [circuitoDashboard, setCircuitoDashboard] = useState('');
@@ -621,27 +627,46 @@ export default function Elecciones2027() {
     }
   };
 
-  const guardarCantidadMesasDeUsuario = async (userId: string, colegioId: string) => {
+  const guardarConfiguracionMesasDeUsuario = async (userId: string, colegioId: string) => {
     const key = `${userId}:${colegioId}`;
-    const cantidad = Number(cantidadMesasUsuario[key]);
-    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 100) {
-      setMensaje('La cantidad de mesas debe ser un número entero entre 1 y 100.');
+    const configuracion = configuracionMesasUsuario[key] ?? [];
+    const mesas = configuracion.map((mesa) => ({
+      id: mesa.id,
+      numero: Number(mesa.numero),
+    }));
+
+    if (mesas.length < 1 || mesas.length > 100) {
+      setMensaje('El colegio debe tener entre 1 y 100 mesas.');
       return;
     }
+    if (mesas.some((mesa) => !Number.isInteger(mesa.numero) || mesa.numero < 1 || mesa.numero > 100000)) {
+      setMensaje('Cada número de mesa debe ser un entero entre 1 y 100.000.');
+      return;
+    }
+    if (new Set(mesas.map((mesa) => mesa.numero)).size !== mesas.length) {
+      setMensaje('Hay números repetidos. Cada mesa del colegio debe tener un número distinto.');
+      return;
+    }
+
     setGuardandoMesasUsuario(key);
     setMensaje('');
     try {
       const { data, error: invokeError } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
-        body: { action: 'actualizar_mesas', user_id: userId, colegio_id: colegioId, cantidad },
+        body: {
+          action: 'actualizar_configuracion_mesas',
+          user_id: userId,
+          colegio_id: colegioId,
+          mesas,
+        },
       });
-      if (invokeError) throw new Error(invokeError.message);
-      if (!data?.success) throw new Error(data?.error || 'No se pudo actualizar la cantidad de mesas.');
-      setMensaje(data.mensaje || 'Se actualizó la cantidad de mesas del establecimiento.');
+      if (invokeError) throw invokeError;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo actualizar la configuración de mesas.');
+      setMensaje(data.mensaje || 'Se actualizó la configuración de mesas del colegio.');
       setUsuarioMesasEditando(null);
-      await cargarUsuariosAdmin();
-      await cargarPublico();
+      setConfiguracionMesasUsuario((old) => ({ ...old, [key]: [] }));
+      await Promise.all([cargarUsuariosAdmin(), cargarPublico()]);
     } catch (err) {
-      setMensaje(await textoErrorFuncion(err, 'No se pudo actualizar la cantidad de mesas.'));
+      setMensaje(await textoErrorFuncion(err, 'No se pudo actualizar la configuración de mesas.'));
     } finally {
       setGuardandoMesasUsuario(null);
     }
@@ -2498,12 +2523,70 @@ export default function Elecciones2027() {
                                         <span className="e27-user-mesas-summary">{colegio.cantidad_mesas} {colegio.cantidad_mesas === 1 ? 'mesa activa' : 'mesas activas'}{colegio.numeros_mesas.length ? ` · N.º ${colegio.numeros_mesas.join(', ')}` : ''}</span>
                                       </div>
                                       {usuarioMesasEditando === key ? (
-                                        <form className="e27-user-mesas-form" onSubmit={(e) => { e.preventDefault(); void guardarCantidadMesasDeUsuario(usuario.user_id, colegio.colegio_id); }}>
-                                          <label>Cantidad de mesas<input type="number" min="1" max="100" step="1" value={cantidadMesasUsuario[key] ?? String(colegio.cantidad_mesas || 1)} onChange={(e) => setCantidadMesasUsuario((old) => ({ ...old, [key]: e.target.value }))} required /></label>
-                                          <div><button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setUsuarioMesasEditando(null)}>Cancelar</button><button type="submit" className="e27-white-button" disabled={guardandoMesasUsuario === key}>{guardandoMesasUsuario === key ? 'Guardando…' : 'Guardar mesas'}</button></div>
+                                        <form className="e27-user-mesas-form e27-user-mesas-config-form" onSubmit={(e) => { e.preventDefault(); void guardarConfiguracionMesasDeUsuario(usuario.user_id, colegio.colegio_id); }}>
+                                          <div className="e27-user-mesas-form-heading">
+                                            <strong>Configuración de mesas</strong>
+                                            <span>Podés cambiar el número, agregar o quitar mesas. Las que tengan reportes asociados no se pueden quitar, pero sí renumerar.</span>
+                                          </div>
+                                          <div className="e27-user-mesas-editor-list">
+                                            {(configuracionMesasUsuario[key] ?? []).map((mesa, index) => (
+                                              <div className="e27-user-mesa-editor" key={mesa.id || `nueva-${index}`}>
+                                                <label>
+                                                  Mesa {index + 1}
+                                                  <input
+                                                    type="number"
+                                                    min="1"
+                                                    max="100000"
+                                                    step="1"
+                                                    inputMode="numeric"
+                                                    value={mesa.numero}
+                                                    onChange={(e) => setConfiguracionMesasUsuario((old) => ({
+                                                      ...old,
+                                                      [key]: (old[key] ?? []).map((item, itemIndex) => itemIndex === index ? { ...item, numero: e.target.value } : item),
+                                                    }))}
+                                                    required
+                                                  />
+                                                </label>
+                                                <span>{mesa.id ? 'Mesa existente · conserva electores y reportes' : 'Mesa nueva'}</span>
+                                                <button
+                                                  type="button"
+                                                  className="e27-white-button e27-white-button-outline e27-remove-mesa-button"
+                                                  onClick={() => setConfiguracionMesasUsuario((old) => ({
+                                                    ...old,
+                                                    [key]: (old[key] ?? []).filter((_, itemIndex) => itemIndex !== index),
+                                                  }))}
+                                                  aria-label={`Quitar mesa ${mesa.numero}`}
+                                                >Quitar</button>
+                                              </div>
+                                            ))}
+                                          </div>
+                                          <button
+                                            type="button"
+                                            className="e27-white-button e27-white-button-outline e27-add-mesa-button"
+                                            disabled={(configuracionMesasUsuario[key] ?? []).length >= 100}
+                                            onClick={() => setConfiguracionMesasUsuario((old) => {
+                                              const actual = old[key] ?? [];
+                                              const maximo = actual.reduce((max, item) => Math.max(max, Number(item.numero) || 0), 0);
+                                              return { ...old, [key]: [...actual, { id: null, numero: String(maximo + 1) }] };
+                                            })}
+                                          >+ Agregar mesa</button>
+                                          <div className="e27-user-mesas-form-actions">
+                                            <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setUsuarioMesasEditando(null)}>Cancelar</button>
+                                            <button type="submit" className="e27-white-button" disabled={guardandoMesasUsuario === key || !(configuracionMesasUsuario[key] ?? []).length}>{guardandoMesasUsuario === key ? 'Guardando…' : 'Guardar configuración'}</button>
+                                          </div>
                                         </form>
                                       ) : (
-                                        <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioMesasEditando(key); setCantidadMesasUsuario((old) => ({ ...old, [key]: String(colegio.cantidad_mesas || 1) })); }}>✎ Editar cantidad</button>
+                                        <button
+                                          type="button"
+                                          className="e27-white-button e27-white-button-outline"
+                                          onClick={() => {
+                                            setUsuarioMesasEditando(key);
+                                            setConfiguracionMesasUsuario((old) => ({
+                                              ...old,
+                                              [key]: colegio.mesas.map((mesa) => ({ id: mesa.id, numero: String(mesa.numero) })),
+                                            }));
+                                          }}
+                                        >✎ Editar mesas y numeración</button>
                                       )}
                                     </div>
                                   );
