@@ -1390,7 +1390,9 @@ export default function Elecciones2027() {
     if (!guardado && hora !== primeraFranjaPendiente) return;
 
     setFranjaHora(hora);
-    setFranjaEditando(guardado);
+    // Seleccionar una franja guardada muestra primero su resumen gris.
+    // La edición se habilita únicamente al pulsar el botón "Editar" del resumen.
+    setFranjaEditando(false);
     setVotantes(guardado ? franjasGuardadas[hora] : '');
     setMensaje('');
   };
@@ -1446,17 +1448,24 @@ export default function Elecciones2027() {
       };
       if (!resultado?.success) throw new Error('Supabase no confirmó el guardado de la participación.');
 
-      const guardadasActualizadas = { ...franjasGuardadas, [franjaHora]: String(cantidad) };
+      const estabaEditando = franjaEditando;
+      const franjaGuardada = franjaHora;
+      const guardadasActualizadas = { ...franjasGuardadas, [franjaGuardada]: String(cantidad) };
       setFranjasGuardadas(guardadasActualizadas);
       setFranjaEditando(false);
 
       const primeraPendiente = HORARIOS_PARTICIPACION.find((hora) => guardadasActualizadas[hora] === undefined);
-      if (primeraPendiente) {
+      if (estabaEditando) {
+        // Tras corregir una franja, conservarla seleccionada y mostrarla en gris.
+        setFranjaHora(franjaGuardada);
+        setVotantes(String(cantidad));
+      } else if (primeraPendiente) {
+        // Una franja nueva completada habilita la siguiente, sin saltar horarios.
         setFranjaHora(primeraPendiente);
         setVotantes('');
       } else {
-        setHoraUltimoRegistro(franjaHora);
-        setVotantesUltimoRegistro(cantidad);
+        setFranjaHora(franjaGuardada);
+        setVotantes(String(cantidad));
       }
 
       const ultimaHoraActual = HORARIOS_PARTICIPACION.filter((hora) => guardadasActualizadas[hora] !== undefined).at(-1) ?? '';
