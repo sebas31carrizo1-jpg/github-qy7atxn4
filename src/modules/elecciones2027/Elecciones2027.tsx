@@ -2703,23 +2703,23 @@ export default function Elecciones2027() {
                                                     aria-label={`Quitar mesa nueva ${mesa.numero}`}
                                                   >Quitar</button>
                                                 )}
-                                                {mesa.id && mesaEliminarConfirmando === mesa.id && (
-                                                  <div className="e27-delete-confirm-panel e27-mesa-delete-confirm">
-                                                    <strong>Eliminar definitivamente la Mesa {mesa.numero}</strong>
-                                                    <p>Se eliminarán la mesa y sus reportes de participación y escrutinio, incluidos los votos y las franjas horarias asociados. Esto afecta a todas las personas asignadas al colegio. El historial general de auditoría se conserva.</p>
-                                                    <p>Escribí <b>ELIMINAR MESA Y SUS REPORTES</b> para confirmar.</p>
-                                                    <label>Confirmación
-                                                      <input value={confirmacionEliminarMesa} onChange={(e) => setConfirmacionEliminarMesa(e.target.value)} placeholder="ELIMINAR MESA Y SUS REPORTES" autoComplete="off" />
-                                                    </label>
-                                                    <div className="e27-delete-confirm-actions">
-                                                      <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setMesaEliminarConfirmando(null); setConfirmacionEliminarMesa(''); }}>Cancelar</button>
-                                                      <button type="button" className="e27-white-button e27-danger-button" disabled={confirmacionEliminarMesa !== 'ELIMINAR MESA Y SUS REPORTES' || eliminandoElemento === mesa.id} onClick={() => void eliminarMesaDePrueba(mesa.id!)}>{eliminandoElemento === mesa.id ? 'Eliminando…' : 'Confirmar eliminación'}</button>
-                                                    </div>
-                                                  </div>
-                                                )}
                                               </div>
                                             ))}
                                           </div>
+                                          {mesaEliminarConfirmando && (configuracionMesasUsuario[key] ?? []).some((item) => item.id === mesaEliminarConfirmando) && (
+                                            <div className="e27-delete-confirm-panel e27-mesa-delete-confirm">
+                                              <strong>Eliminar definitivamente la Mesa {(configuracionMesasUsuario[key] ?? []).find((item) => item.id === mesaEliminarConfirmando)?.numero}</strong>
+                                              <p>Se eliminarán la mesa y sus reportes de participación y escrutinio, incluidos los votos y las franjas horarias asociados. Esto afecta a todas las personas asignadas al colegio. El historial general de auditoría se conserva.</p>
+                                              <p>Escribí <b>ELIMINAR MESA Y SUS REPORTES</b> para confirmar.</p>
+                                              <label>Confirmación
+                                                <input value={confirmacionEliminarMesa} onChange={(e) => setConfirmacionEliminarMesa(e.target.value)} placeholder="ELIMINAR MESA Y SUS REPORTES" autoComplete="off" />
+                                              </label>
+                                              <div className="e27-delete-confirm-actions">
+                                                <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setMesaEliminarConfirmando(null); setConfirmacionEliminarMesa(''); }}>Cancelar</button>
+                                                <button type="button" className="e27-white-button e27-danger-button" disabled={confirmacionEliminarMesa !== 'ELIMINAR MESA Y SUS REPORTES' || eliminandoElemento === mesaEliminarConfirmando} onClick={() => void eliminarMesaDePrueba(mesaEliminarConfirmando)}>{eliminandoElemento === mesaEliminarConfirmando ? 'Eliminando…' : 'Confirmar eliminación'}</button>
+                                              </div>
+                                            </div>
+                                          )}
                                           <button
                                             type="button"
                                             className="e27-white-button e27-white-button-outline e27-add-mesa-button"
