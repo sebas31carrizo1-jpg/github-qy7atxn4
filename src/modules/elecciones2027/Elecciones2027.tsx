@@ -56,6 +56,7 @@ type EscrutinioCargaGuardado = {
   user_id: string;
   estado: string;
   votos_partidos: Record<string, number>;
+  votos_listas?: Record<string, number>;
   votos_blancos: number;
   votos_nulos: number;
 };
@@ -1568,7 +1569,7 @@ export default function Elecciones2027() {
       if (tipo === 'escrutinio') {
         const { data: reporte, error: escrutinioError } = await supabase
           .from('elecciones_reportes_escrutinio')
-          .select('id,user_id,estado,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(partido_id,votos)')
+          .select('id,user_id,estado,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(partido_id,votos),elecciones_escrutinio_listas(lista_id,votos)')
           .eq('mesa_id', mesa.id)
           .maybeSingle();
         if (escrutinioError) throw escrutinioError;
@@ -1580,17 +1581,19 @@ export default function Elecciones2027() {
               Number(fila.votos ?? 0),
             ])
           );
+          const votosListasGuardados = Object.fromEntries((reporte.elecciones_escrutinio_listas ?? []).map((fila: any) => [String(fila.lista_id), Number(fila.votos ?? 0)]));
           const registro: EscrutinioCargaGuardado = {
             id: reporte.id,
             user_id: reporte.user_id,
             estado: reporte.estado,
             votos_partidos: votosGuardados,
+            votos_listas: votosListasGuardados,
             votos_blancos: Number(reporte.votos_blancos ?? 0),
             votos_nulos: Number(reporte.votos_nulos ?? 0),
           };
           setEscrutinioGuardado(registro);
           setEscrutinioDeOtraCuenta(reporte.user_id !== perfil?.user_id);
-          setVotos(Object.fromEntries(Object.entries(votosGuardados).map(([id, cantidad]) => [id, String(cantidad)])));
+          setVotos(Object.fromEntries(Object.entries(Object.keys(votosListasGuardados).length ? votosListasGuardados : votosGuardados).map(([id, cantidad]) => [id, String(cantidad)])));
           setBlancos(String(registro.votos_blancos));
           setNulos(String(registro.votos_nulos));
         } else {
@@ -1714,15 +1717,16 @@ export default function Elecciones2027() {
       return;
     }
 
-    const filas = partidos.map((partido) => ({
-      partido_id: partido.id,
-      votos: Number(votos[partido.id] ?? ''),
-    }));
-    if (filas.some((fila) => !Number.isSafeInteger(fila.votos) || fila.votos < 0)) {
+    const usandoListas = modalidadElectoral === 'paso';
+    const listasActivas = listasElectorales.filter((lista) => lista.activo);
+    const filasListas = listasActivas.map((lista) => ({ lista_id: lista.id, partido_id: lista.partido_id, votos: Number(votos[lista.id] ?? '') }));
+    const filas = partidos.map((partido) => ({ partido_id: partido.id, votos: Number(votos[partido.id] ?? '') }));
+    const filasCarga = usandoListas ? filasListas : filas;
+    if (filasCarga.length === 0 || filasCarga.some((fila) => !Number.isSafeInteger(fila.votos) || fila.votos < 0)) {
       setMensaje('Ingresá una cantidad entera e igual o mayor que cero para cada partido.');
       return;
     }
-    const votosPartidos = filas.reduce((total, fila) => total + fila.votos, 0);
+    const votosPartidos = filasCarga.reduce((total, fila) => total + fila.votos, 0);
     const cantidadBlancos = Number(blancos || 0);
     const cantidadNulos = Number(nulos || 0);
     if (!Number.isSafeInteger(cantidadBlancos) || cantidadBlancos < 0 || !Number.isSafeInteger(cantidadNulos) || cantidadNulos < 0) {
@@ -1741,12 +1745,9 @@ export default function Elecciones2027() {
     setCargando(true);
     setMensaje('');
     try {
-      const { data, error } = await supabase.rpc('guardar_escrutinio_responsable', {
-        p_mesa_id: mesaActiva.id,
-        p_votos: filas,
-        p_votos_blancos: cantidadBlancos,
-        p_votos_nulos: cantidadNulos,
-      });
+      const { data, error } = usandoListas
+        ? await supabase.rpc('guardar_escrutinio_responsable_listas', { p_mesa_id: mesaActiva.id, p_votos_listas: filasListas, p_votos_blancos: cantidadBlancos, p_votos_nulos: cantidadNulos })
+        : await supabase.rpc('guardar_escrutinio_responsable', { p_mesa_id: mesaActiva.id, p_votos: filas, p_votos_blancos: cantidadBlancos, p_votos_nulos: cantidadNulos });
       if (error) throw error;
       const resultado = data as unknown as {
         success: boolean;
@@ -1762,13 +1763,14 @@ export default function Elecciones2027() {
         id: resultado.reporte_id,
         user_id: perfil.user_id,
         estado: resultado.estado || 'pendiente',
-        votos_partidos: Object.fromEntries(filas.map((fila) => [fila.partido_id, fila.votos])),
+        votos_partidos: usandoListas ? Object.fromEntries(partidos.map((p) => [p.id, filasListas.filter((f) => f.partido_id === p.id).reduce((s, f) => s + f.votos, 0)])) : Object.fromEntries(filas.map((fila) => [fila.partido_id, fila.votos])),
+        votos_listas: usandoListas ? Object.fromEntries(filasListas.map((fila) => [fila.lista_id, fila.votos])) : undefined,
         votos_blancos: cantidadBlancos,
         votos_nulos: cantidadNulos,
       };
       setEscrutinioGuardado(registro);
       setEscrutinioEditando(false);
-      setVotos(Object.fromEntries(filas.map((fila) => [fila.partido_id, String(fila.votos)])));
+      setVotos(usandoListas ? Object.fromEntries(filasListas.map((fila) => [fila.lista_id, String(fila.votos)])) : Object.fromEntries(filas.map((fila) => [fila.partido_id, String(fila.votos)])));
       setBlancos(String(cantidadBlancos));
       setNulos(String(cantidadNulos));
       setMensaje(resultado.mensaje || 'El escrutinio quedó guardado y enviado a revisión.');
@@ -3760,7 +3762,7 @@ export default function Elecciones2027() {
                             <span>Votos cargados: <strong>{totalEscrutinioActual.toLocaleString('es-AR')}</strong></span>
                             <span>Disponibles: <strong>{Math.max(0, votantesUltimoRegistro - totalEscrutinioActual).toLocaleString('es-AR')}</strong></span>
                           </div>
-                          <div className="e27-vote-grid">{partidos.map((p) => <label key={p.id}><span><i style={{ background: p.color }} />{p.nombre}</span><input type="number" min="0" max={votantesUltimoRegistro} step="1" value={votos[p.id] ?? ''} onChange={(e) => setVotos((old) => ({ ...old, [p.id]: e.target.value }))} placeholder="Cantidad de votos" required /></label>)}</div>
+                          <div className="e27-vote-grid">{modalidadElectoral === 'paso' ? listasElectorales.filter((l) => l.activo).map((l) => { const partido = partidos.find((p) => p.id === l.partido_id); return <label key={l.id}><span><i style={{ background: l.color }} />{l.nombre} · {l.sigla}<small>{partido?.nombre || 'Partido'} · {l.candidato_principal}</small></span><input type="number" min="0" max={votantesUltimoRegistro} step="1" value={votos[l.id] ?? ''} onChange={(e) => setVotos((old) => ({ ...old, [l.id]: e.target.value }))} placeholder="Cantidad de votos" required /></label>; }) : partidos.map((p) => <label key={p.id}><span><i style={{ background: p.color }} />{p.nombre}</span><input type="number" min="0" max={votantesUltimoRegistro} step="1" value={votos[p.id] ?? ''} onChange={(e) => setVotos((old) => ({ ...old, [p.id]: e.target.value }))} placeholder="Cantidad de votos" required /></label>)}</div>
                           <div className="e27-scrutiny-extras">
                             <label>Votos en blanco<input type="number" min="0" max={votantesUltimoRegistro} step="1" value={blancos} onChange={(e) => setBlancos(e.target.value)} /></label>
                             <label>Votos nulos<input type="number" min="0" max={votantesUltimoRegistro} step="1" value={nulos} onChange={(e) => setNulos(e.target.value)} /></label>
