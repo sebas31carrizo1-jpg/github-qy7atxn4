@@ -66,6 +66,7 @@ type UsuarioAdmin = {
     colegio_id: string;
     nombre: string;
     circuito: string | null;
+    activo: boolean;
     numeros_mesas: number[];
     cantidad_mesas: number;
   }> ;
@@ -961,13 +962,12 @@ export default function Elecciones2027() {
   }, [tipoCarga, mesaActiva, cargando]);
 
   useEffect(() => {
+    if (perfil?.rol === 'administrador_general') return;
     const intervalo = window.setInterval(() => {
-      if (document.visibilityState === 'visible' && perfil?.rol !== 'administrador_general') {
-        void actualizarDatos();
-      }
+      if (document.visibilityState === 'visible') void actualizarDatos();
     }, 15000);
     return () => window.clearInterval(intervalo);
-  }, [actualizarDatos]);
+  }, [actualizarDatos, perfil?.rol]);
 
   useEffect(() => {
     let vigente = true;
@@ -2452,7 +2452,7 @@ export default function Elecciones2027() {
                                 <div className="e27-user-identity">
                                   <strong>{usuario.nombre || 'Sin nombre'}</strong>
                                   <span className="e27-user-email">{usuario.email}</span>
-                                  <small>{usuario.creado_en ? `Alta: ${new Date(usuario.creado_en).toLocaleDateString('es-AR')}` : 'Fecha de alta no disponible'}</small>
+                                  <small>{usuario.creado_en ? `${usuario.activo ? 'Activo desde' : 'Alta'}: ${new Date(usuario.creado_en).toLocaleDateString('es-AR')}` : 'Fecha de alta no disponible'}</small>
                                 </div>
                                 <span className={`e27-user-status ${usuario.activo ? 'is-active' : 'is-inactive'}`}>{usuario.activo ? 'Activo' : 'Inactivo'}</span>
                               </div>
@@ -2476,6 +2476,7 @@ export default function Elecciones2027() {
                                       <div className="e27-user-school-copy">
                                         <small>Colegio asignado</small>
                                         <strong>{colegio.nombre}</strong>
+                                        <span className={`e27-user-school-status ${colegio.activo ? 'is-active' : 'is-inactive'}`}>{colegio.activo ? 'Colegio activo' : 'Colegio inactivo'}</span>
                                         <span className="e27-user-circuit">Circuito {colegio.circuito || '—'}</span>
                                         <span className="e27-user-mesas-summary">{colegio.cantidad_mesas} {colegio.cantidad_mesas === 1 ? 'mesa activa' : 'mesas activas'}{colegio.numeros_mesas.length ? ` · N.º ${colegio.numeros_mesas.join(', ')}` : ''}</span>
                                       </div>
