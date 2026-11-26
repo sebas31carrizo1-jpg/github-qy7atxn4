@@ -1262,6 +1262,28 @@ export default function Elecciones2027() {
     }
   };
 
+  const resetearDatosColegio = async (colegio: Colegio) => {
+    const confirmar = window.confirm(
+      `¿Estás seguro de que querés resetear los datos de ${colegio.nombre}? Se eliminarán todos los reportes y resultados de participación y escrutinio de sus mesas. Se conservarán el colegio, las mesas, su numeración, los electores habilitados y los responsables asignados.`
+    );
+    if (!confirmar) return;
+    setGuardandoConfiguracionColegio(colegio.id);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: { action: 'resetear_datos_colegio', colegio_id: colegio.id },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudieron resetear los datos del establecimiento.');
+      setMensaje(data.mensaje || `Se resetearon los datos de ${colegio.nombre}.`);
+      await Promise.all([cargarPublico(), cargarUsuariosAdmin(), cargarReportesAdmin()]);
+    } catch (err) {
+      setMensaje(await textoErrorFuncion(err, 'No se pudieron resetear los datos del establecimiento.'));
+    } finally {
+      setGuardandoConfiguracionColegio(null);
+    }
+  };
+
   const guardarNombreColegio = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const colegioId = colegioEditandoId;
@@ -2852,6 +2874,13 @@ export default function Elecciones2027() {
                                   </div>
                                 </div>
                               )}
+                              <div className="e27-college-edit-actions">
+                                <button type="button" className="e27-white-button e27-reset-school-button"
+                                  disabled={guardandoConfiguracionColegio === colegio.id}
+                                  onClick={() => void resetearDatosColegio(colegio)}>
+                                  {guardandoConfiguracionColegio === colegio.id ? 'Procesando…' : '↻ Resetear datos del colegio'}
+                                </button>
+                              </div>
                               <div className="e27-college-edit-actions">
                                 <select value={responsableAsignarPorColegio[colegio.id] ?? ''}
                                   onChange={(e) => setResponsableAsignarPorColegio((old) => ({ ...old, [colegio.id]: e.target.value }))}>
