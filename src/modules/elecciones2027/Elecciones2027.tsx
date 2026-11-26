@@ -276,11 +276,13 @@ function colorGanadorPorIntensidad(color: string, porcentaje: number) {
 
 function MapaColegios({
   data,
+  municipio,
   colegioSeleccionado,
   resultados,
   onSeleccionar,
 }: {
   data: FeatureCollection | null;
+  municipio: FeatureCollection | null;
   colegioSeleccionado?: string;
   resultados: Record<string, ResultadoGanadorColegio>;
   onSeleccionar: (nombre: string) => void;
@@ -293,8 +295,9 @@ function MapaColegios({
 
   return (
     <MapContainer center={[-34.75, -58.62]} zoom={10} scrollWheelZoom className="e27-map e27-map-college-only">
-      <AjustarMapa data={data} />
+      <AjustarMapa data={municipio ?? data} />
       <CentrarPoligonoColegio data={data} colegioSeleccionado={colegioSeleccionado} />
+      {municipio && <GeoJSON data={municipio as never} style={() => ({ color: '#174b67', weight: 2.2, opacity: 0.95, fillColor: '#e8f5fa', fillOpacity: 0.12, interactive: false })} />}
       <GeoJSON
         key={firmaResultados}
         data={data as never}
@@ -2118,7 +2121,7 @@ export default function Elecciones2027() {
                     </div>
                   </div>
                 </div>
-                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} resultados={resultadosPorColegio} colegioSeleccionado={colegioPublicoActivo?.identificador_kml || colegioPublicoActivo?.nombre_normalizado || colegioPublicoActivo?.nombre || colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
+                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} municipio={municipio} resultados={resultadosPorColegio} colegioSeleccionado={colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
                 <div className="e27-map-foot">{colegiosKml?.features.length ?? '—'} polígonos de establecimientos · La capa de circuitos está excluida</div>
                 <div className="e27-college-map-legend">
                   <div className="e27-college-map-legend-parties">
