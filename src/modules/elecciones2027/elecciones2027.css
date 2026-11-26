@@ -3501,3 +3501,56 @@
     width:100%;
   }
 }
+
+
+/* Porcentajes de escrutinio más legibles en municipio, colegios y circuitos. */
+.e27-public-summary-panel .e27-party-result-line > strong {
+  flex:0 0 auto;
+  color:#123f56 !important;
+  font-size:16px !important;
+  font-weight:850 !important;
+  line-height:1.2;
+  letter-spacing:-.25px;
+}
+.e27-public-summary-panel .e27-party-result-line > span {
+  font-size:13px !important;
+  line-height:1.35;
+}
+
+/* La ficha de información de circuito acompaña la altura del mapa
+   y dispone de algo más de ancho para que no quede visualmente comprimida. */
+.e27-circuit-results-layout {
+  grid-template-columns:minmax(0, .94fr) minmax(0, 1.06fr) !important;
+  align-items:stretch !important;
+}
+.e27-circuit-results-layout > .e27-circuit-results-map-panel,
+.e27-circuit-results-layout > .e27-circuit-results-summary {
+  align-self:stretch !important;
+  min-height:100%;
+  box-sizing:border-box;
+}
+.e27-circuit-results-summary {
+  height:100%;
+  max-height:none !important;
+  overflow:visible !important;
+}
+.e27-circuit-results-summary .e27-party-result-line > strong {
+  font-size:16px !important;
+  font-weight:850 !important;
+}
+.e27-circuit-results-summary .e27-party-result-line > span {
+  font-size:13px !important;
+}
+@media (max-width:900px) {
+  .e27-circuit-results-layout {
+    grid-template-columns:minmax(0,1fr) !important;
+    align-items:start !important;
+  }
+  .e27-circuit-results-layout > .e27-circuit-results-map-panel,
+  .e27-circuit-results-layout > .e27-circuit-results-summary {
+    min-height:0;
+  }
+  .e27-circuit-results-summary {
+    height:auto;
+  }
+}
