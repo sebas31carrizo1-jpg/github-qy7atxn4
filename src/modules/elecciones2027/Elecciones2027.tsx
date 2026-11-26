@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { GeoJSON, MapContainer, useMap } from 'react-leaflet';
 import type { FeatureCollection } from 'geojson';
@@ -367,6 +367,18 @@ function numeroAR(valor: number) {
   return new Intl.NumberFormat('es-AR').format(valor);
 }
 
+function textoError(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === 'object') {
+    const detalle = error as { message?: unknown; details?: unknown; hint?: unknown };
+    const partes = [detalle.message, detalle.details, detalle.hint]
+      .filter((parte) => typeof parte === 'string' && parte.trim())
+      .map((parte) => String(parte).trim());
+    if (partes.length) return partes.join(' · ');
+  }
+  return fallback;
+}
+
 export default function Elecciones2027() {
   const [vista, setVista] = useState<'participacion' | 'municipio' | 'circuitos' | 'colegios'>('participacion');
   const [mostrarLogin, setMostrarLogin] = useState(false);
@@ -401,6 +413,10 @@ export default function Elecciones2027() {
   const [colorGanador, setColorGanador] = useState('#E5E7EB');
   const [nombreGanador, setNombreGanador] = useState('Resultados aún no publicados');
   const [cargandoDatos, setCargandoDatos] = useState(true);
+  const [actualizandoDatos, setActualizandoDatos] = useState(false);
+  const [ultimaActualizacion, setUltimaActualizacion] = useState<Date | null>(null);
+  const actualizacionEnCursoRef = useRef(false);
+  const cartografiaCargadaRef = useRef(false);
   const [mesaActiva, setMesaActiva] = useState<Mesa | null>(null);
   const [tipoCarga, setTipoCarga] = useState<'participacion' | 'escrutinio' | null>(null);
   const [votantes, setVotantes] = useState('');
@@ -609,18 +625,22 @@ export default function Elecciones2027() {
     }
   };
 
-  const cargarPublico = useCallback(async () => {
-    setCargandoDatos(true);
+  const cargarPublico = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCargandoDatos(true);
     setErrorDatosPublicos('');
     const [mapaResponse, circuitosResponse, partidosResponse, colegiosPublicosResponse, mesasPublicasResponse, reportesResponse, participacionResponse] = await Promise.all([
-      fetch(municipioUrl).then(async (r) => {
-        if (!r.ok) throw new Error(`No se encontró ${municipioUrl}. Colocá el archivo en public/la-matanza-municipio.geojson.`);
-        return r.json();
-      }).catch((e) => { setErrorMunicipio(e instanceof Error ? e.message : 'No se pudo cargar el polígono municipal.'); return null; }),
-      fetch(`${import.meta.env.BASE_URL}circuitos-la-matanza.geojson`).then(async (r) => {
-        if (!r.ok) throw new Error('No se encontró public/circuitos-la-matanza.geojson');
-        return r.json();
-      }).catch((e) => { setMensaje(e instanceof Error ? e.message : 'No se pudo cargar la cartografía de circuitos.'); return null; }),
+      !silencioso && !cartografiaCargadaRef.current
+        ? fetch(municipioUrl).then(async (r) => {
+            if (!r.ok) throw new Error(`No se encontró ${municipioUrl}. Colocá el archivo en public/la-matanza-municipio.geojson.`);
+            return r.json();
+          }).catch((e) => { setErrorMunicipio(e instanceof Error ? e.message : 'No se pudo cargar el polígono municipal.'); return null; })
+        : Promise.resolve(null),
+      !silencioso && !cartografiaCargadaRef.current
+        ? fetch(`${import.meta.env.BASE_URL}circuitos-la-matanza.geojson`).then(async (r) => {
+            if (!r.ok) throw new Error('No se encontró public/circuitos-la-matanza.geojson');
+            return r.json();
+          }).catch((e) => { setMensaje(e instanceof Error ? e.message : 'No se pudo cargar la cartografía de circuitos.'); return null; })
+        : Promise.resolve(null),
       supabase.from('elecciones_partidos').select('id,nombre,sigla,color').eq('activo', true),
       supabase.from('elecciones_colegios').select('id,nombre,nombre_normalizado,identificador_kml,circuito').eq('activo', true).order('nombre'),
       supabase.from('elecciones_mesas').select('id,numero,electores_habilitados,colegio_id').eq('activo', true).order('numero'),
@@ -632,12 +652,15 @@ export default function Elecciones2027() {
         .eq('estado', 'publicado'),
     ]);
 
-    if (mapaResponse?.features) setMunicipio(mapaResponse);
-    if (circuitosResponse?.features) setCircuitosGeo(circuitosResponse);
-    fetch(`${import.meta.env.BASE_URL}COLEGIOS%20OCTUBRE%202025.kml`)
-      .then((r) => r.ok ? r.text() : Promise.reject(new Error('No se encontró el KML')))
-      .then((raw) => setColegiosKml(convertirKml(raw)))
-      .catch((e) => setMensaje(e.message || 'No se pudo cargar el KML.'));
+    if (!silencioso && !cartografiaCargadaRef.current) {
+      if (mapaResponse?.features) setMunicipio(mapaResponse);
+      if (circuitosResponse?.features) setCircuitosGeo(circuitosResponse);
+      fetch(`${import.meta.env.BASE_URL}COLEGIOS%20OCTUBRE%202025.kml`)
+        .then((r) => r.ok ? r.text() : Promise.reject(new Error('No se encontró el KML')))
+        .then((raw) => setColegiosKml(convertirKml(raw)))
+        .catch((e) => setMensaje(e.message || 'No se pudo cargar el KML.'));
+      cartografiaCargadaRef.current = true;
+    }
 
     if (!partidosResponse.error && partidosResponse.data) setPartidos(partidosResponse.data as Partido[]);
     // El conteo oficial se obtiene desde una vista SQL calculada sobre las tablas reales.
@@ -762,7 +785,7 @@ export default function Elecciones2027() {
     } else {
       setParticipacionCircuitos({});
     }
-    setCargandoDatos(false);
+    if (!silencioso) setCargandoDatos(false);
   }, []);
 
   useEffect(() => {
@@ -853,7 +876,7 @@ export default function Elecciones2027() {
     }
   }, []);
 
-  const cargarReportesAdmin = async () => {
+  const cargarReportesAdmin = useCallback(async () => {
     const [part, escr] = await Promise.all([
       supabase.from('elecciones_reportes_participacion')
         .select('id,mesa_id,user_id,estado,creado_en,elecciones_mesas(numero,elecciones_colegios(nombre))')
@@ -871,11 +894,44 @@ export default function Elecciones2027() {
       });
     setReportes([...normalizar(part.data, 'participacion'), ...normalizar(escr.data, 'escrutinio')]);
     if (part.error || escr.error) setMensaje('No se pudieron consultar todos los reportes pendientes. Revisá las políticas y relaciones de Supabase.');
-  };
+  }, []);
 
   useEffect(() => {
     if (perfil?.rol === 'administrador_general') void cargarReportesAdmin();
-  }, [perfil]);
+  }, [perfil, cargarReportesAdmin]);
+
+  const actualizarDatos = useCallback(async () => {
+    if (actualizacionEnCursoRef.current || cargando || mesaActiva) return;
+
+    const hayEdicionLocalDeElectores = mesas.some((mesa) => {
+      const valorGuardado = mesa.electores_habilitados > 0 ? String(mesa.electores_habilitados) : '';
+      return Object.prototype.hasOwnProperty.call(electoresPorMesa, mesa.id)
+        && electoresPorMesa[mesa.id] !== valorGuardado;
+    });
+
+    actualizacionEnCursoRef.current = true;
+    setActualizandoDatos(true);
+    try {
+      const tareas: Promise<unknown>[] = [cargarPublico(true)];
+      // No reemplazar lo que el responsable esté escribiendo en el padrón.
+      if (perfil && !hayEdicionLocalDeElectores) tareas.push(cargarPerfil(perfil.user_id));
+      if (perfil?.rol === 'administrador_general') tareas.push(cargarReportesAdmin());
+      await Promise.all(tareas);
+      setUltimaActualizacion(new Date());
+    } catch (error) {
+      console.warn('No se pudo completar la actualización automática:', textoError(error, 'Error de actualización.'));
+    } finally {
+      actualizacionEnCursoRef.current = false;
+      setActualizandoDatos(false);
+    }
+  }, [cargando, mesaActiva, mesas, electoresPorMesa, cargarPublico, perfil, cargarPerfil, cargarReportesAdmin]);
+
+  useEffect(() => {
+    const intervalo = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void actualizarDatos();
+    }, 15000);
+    return () => window.clearInterval(intervalo);
+  }, [actualizarDatos]);
 
   useEffect(() => {
     let vigente = true;
@@ -1054,9 +1110,10 @@ export default function Elecciones2027() {
         : item
       ));
       setElectoresPorMesa((actuales) => ({ ...actuales, [mesa.id]: String(cantidad) }));
+      await cargarPublico(true);
       setMensaje(`Se guardaron ${cantidad.toLocaleString('es-AR')} electores habilitados para la Mesa ${mesa.numero}.`);
     } catch (err) {
-      setMensaje(err instanceof Error ? `No se pudo guardar el padrón de la Mesa ${mesa.numero}: ${err.message}` : 'No se pudo guardar la cantidad de electores.');
+      setMensaje(`No se pudo guardar el padrón de la Mesa ${mesa.numero}: ${textoError(err, 'Error de guardado.')}`);
     } finally {
       setGuardandoElectoresMesa(null);
     }
@@ -1216,7 +1273,8 @@ export default function Elecciones2027() {
       }
       setMensaje('Escrutinio enviado para revisión de la administración central.');
       setMesaActiva(null); setTipoCarga(null);
-    } catch (err) { setMensaje(err instanceof Error ? err.message : 'No se pudo enviar el escrutinio.'); }
+      await cargarPublico(true);
+    } catch (err) { setMensaje(`No se pudo enviar el escrutinio: ${textoError(err, 'Error de guardado.')}`); }
     finally { setCargando(false); }
   };
 
@@ -1460,6 +1518,15 @@ export default function Elecciones2027() {
           <span className={`e27-connection e27-connection-${estadoConexion}`}>
             <i /> {estadoConexion === 'conectado' ? 'Supabase conectado' : estadoConexion === 'error' ? 'Sin conexión con Supabase' : 'Verificando Supabase…'}
           </span>
+          <button
+            type="button"
+            className="e27-white-button e27-refresh-button"
+            onClick={() => void actualizarDatos()}
+            disabled={actualizandoDatos || Boolean(mesaActiva)}
+            title={ultimaActualizacion ? `Última actualización: ${ultimaActualizacion.toLocaleTimeString('es-AR')}` : 'Actualización automática cada 15 segundos'}
+          >
+            {actualizandoDatos ? 'Actualizando…' : '↻ Actualizar datos'}
+          </button>
           {!perfil ? (
             <button type="button" className="e27-white-button e27-admin-access-button" onClick={() => { setError(''); setMostrarLogin(true); }}>Administración</button>
           ) : (
