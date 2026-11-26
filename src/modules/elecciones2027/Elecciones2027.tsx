@@ -302,11 +302,13 @@ function MapaCircuitos({
   valores,
   modo,
   selectedCircuit = '',
+  onSeleccionarCircuito,
 }: {
   data: FeatureCollection | null;
   valores: Record<string, DatoCircuito>;
   modo: 'participacion' | 'resultados';
   selectedCircuit?: string;
+  onSeleccionarCircuito?: (codigo: string) => void;
 }) {
   if (!data) return <div className="e27-map-loading">Cargando circuitos electorales…</div>;
 
@@ -345,7 +347,7 @@ function MapaCircuitos({
         }}
         onEachFeature={(feature, layer) => {
           const props = feature.properties as Record<string, unknown> | undefined;
-          const codigo = String(props?.circuito ?? props?.CIRCUITO ?? 'Circuito').trim();
+          const codigo = String(props?.circuito ?? props?.CIRCUITO ?? '').trim() || 'Circuito';
           const dato = valores[codigo];
           const detalle = modo === 'participacion'
             ? dato
@@ -354,10 +356,13 @@ function MapaCircuitos({
             : dato
               ? `${dato.partido} · ${dato.porcentaje.toFixed(1)}% · ${numeroAR(dato.votos || 0)} votos`
               : 'Sin escrutinio publicado';
-          layer.bindTooltip(`<strong>${codigo}</strong><br/>${detalle}`, {
+          layer.bindTooltip(`<strong>${codigo}</strong><br/>${detalle}<br/><small>Tocá para ver el detalle del circuito</small>`, {
             sticky: true,
             className: 'e27-map-tooltip',
           });
+          if (codigo !== 'Circuito') {
+            layer.on('click', () => onSeleccionarCircuito?.(codigo));
+          }
         }}
       />
     </MapContainer>
@@ -1417,6 +1422,11 @@ export default function Elecciones2027() {
     { key: 'votos-nulos', nombre: 'Votos nulos', color: '#8b5cf6', votos: votosNulosCircuito },
   ].filter((item) => item.votos > 0);
 
+  const seleccionarCircuito = (codigo: string) => {
+    setCircuitoSeleccionado(codigo);
+    setCircuitoResultadoSeleccionado(codigo);
+  };
+
   const seleccionarColegioPublico = (colegio: Colegio) => {
     const identificadorPoligono = String(
       colegio.identificador_kml || colegio.nombre_normalizado || colegio.nombre
@@ -1972,14 +1982,20 @@ export default function Elecciones2027() {
             <div className="e27-public-split e27-participation-layout">
               <section className="e27-panel e27-public-map-panel">
                 <div className="e27-panel-heading"><div><span className="e27-kicker">MAPA DE PARTICIPACIÓN · {circuitoSeleccionado ? `CIRCUITO ${circuitoSeleccionado}` : 'TOTAL MUNICIPAL'}</span><h2>{circuitoSeleccionado ? `Participación del circuito ${circuitoSeleccionado}` : 'Participación total en La Matanza'}</h2><p>La intensidad del verde representa el porcentaje de votantes registrado y publicado en cada circuito.</p></div><span className="e27-map-label">VERDE = PARTICIPACIÓN</span></div>
-                <div className="e27-map-wrap e27-map-wrap-participation"><MapaCircuitos data={circuitosGeo} valores={participacionCircuitos} modo="participacion" selectedCircuit={circuitoSeleccionado} /></div>
+                <div className="e27-map-wrap e27-map-wrap-participation"><MapaCircuitos
+                    data={circuitosGeo}
+                    valores={participacionCircuitos}
+                    modo="participacion"
+                    selectedCircuit={circuitoSeleccionado}
+                    onSeleccionarCircuito={seleccionarCircuito}
+                  /></div>
                 <div className="e27-legend"><span>0%</span><div className="e27-gradient green-gradient" /><span>100%</span></div>
               </section>
               <aside className="e27-panel e27-public-summary-panel">
                 <span className="e27-kicker">SEGUIMIENTO DE PARTICIPACIÓN</span>
                 <h2>{circuitoSeleccionado ? 'Consultar por circuito' : 'Participación total'}</h2>
                 <label className="e27-public-filter">Ver participación
-                  <select value={circuitoSeleccionado} onChange={(e) => setCircuitoSeleccionado(e.target.value)}>
+                  <select value={circuitoSeleccionado} onChange={(e) => seleccionarCircuito(e.target.value)}>
                     <option value="">Participación total</option>
                     {CIRCUITOS_ELECTORALES.map((codigo) => <option key={codigo} value={codigo}>Circuito {codigo}</option>)}
                   </select>
@@ -2089,6 +2105,7 @@ export default function Elecciones2027() {
                     valores={resultadosCircuitos}
                     modo="resultados"
                     selectedCircuit={circuitoResultadoSeleccionado}
+                    onSeleccionarCircuito={seleccionarCircuito}
                   />
                 </div>
                 <div className="e27-party-legend">
@@ -2104,7 +2121,7 @@ export default function Elecciones2027() {
                 <label className="e27-public-filter">Seleccionar circuito electoral
                   <select
                     value={circuitoResultadoSeleccionado}
-                    onChange={(e) => setCircuitoResultadoSeleccionado(e.target.value)}
+                    onChange={(e) => seleccionarCircuito(e.target.value)}
                   >
                     <option value="">Todos los circuitos · Total municipal</option>
                     {CIRCUITOS_ELECTORALES.map((codigo) => <option key={codigo} value={codigo}>Circuito {codigo}</option>)}
