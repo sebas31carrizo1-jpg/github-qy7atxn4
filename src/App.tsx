@@ -329,7 +329,7 @@ function App() {
 
   // CARGAR GEOJSON
   useEffect(() => {
-    fetch('/circuitos-la-matanza.geojson')
+    fetch(`${import.meta.env.BASE_URL}circuitos-la-matanza.geojson`)
       .then((respuesta) => {
         if (!respuesta.ok) {
           throw new Error('No se encontró el archivo GeoJSON');
@@ -1200,7 +1200,7 @@ function App() {
 
               <img
                 className="hero-sol-mayo"
-                src="/sol-de-mayo-transparente.png"
+                src={`${import.meta.env.BASE_URL}sol-de-mayo-transparente.png`}
                 alt="Sol de Mayo argentino"
               />
             </section>

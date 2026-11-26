@@ -19,6 +19,9 @@ type Colegio = {
   id: string;
   nombre: string;
   circuito: string | null;
+  // Identificador estable del nombre original del KML; no se modifica al cambiar el nombre visible.
+  nombre_normalizado?: string | null;
+  identificador_kml?: string | null;
 };
 
 type ResultadoPartidoPublico = {
@@ -52,6 +55,22 @@ type MesaConfiguracion = {
   numero: string;
 };
 
+type UsuarioAdmin = {
+  user_id: string;
+  email: string;
+  nombre: string;
+  rol: 'responsable_escuela';
+  activo: boolean;
+  creado_en?: string | null;
+  colegios: Array<{
+    colegio_id: string;
+    nombre: string;
+    circuito: string | null;
+    numeros_mesas: number[];
+    cantidad_mesas: number;
+  }> ;
+};
+
 type Asignacion = {
   colegio_id: string;
   elecciones_colegios: Colegio | Colegio[] | null;
@@ -80,7 +99,7 @@ type DatoCircuito = {
   votos?: number;
 };
 
-const municipioUrl = '/la-matanza-municipio.geojson';
+const municipioUrl = `${import.meta.env.BASE_URL}la-matanza-municipio.geojson`;
 
 // Catálogo inicial de los 25 circuitos electorales de La Matanza.
 // En la siguiente etapa se vinculará con los circuitos registrados en Supabase.
@@ -187,6 +206,32 @@ function normalizarNombreColegio(valor: string) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function CentrarPoligonoColegio({
+  data,
+  colegioSeleccionado,
+}: {
+  data: FeatureCollection;
+  colegioSeleccionado?: string;
+}) {
+  const map = useMap();
+
+  useEffect(() => {
+    const objetivo = normalizarNombreColegio(colegioSeleccionado || '');
+    if (!objetivo) return;
+    const feature = data.features.find((item) => {
+      const nombre = String((item.properties as any)?.nombre || '');
+      return normalizarNombreColegio(nombre) === objetivo;
+    });
+    if (!feature) return;
+    const bounds = L.geoJSON(feature as never).getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [42, 42], maxZoom: 14, animate: true });
+    }
+  }, [data, colegioSeleccionado, map]);
+
+  return null;
+}
+
 function MapaColegios({
   data,
   colegioSeleccionado,
@@ -202,16 +247,17 @@ function MapaColegios({
   return (
     <MapContainer center={[-34.75, -58.62]} zoom={10} scrollWheelZoom className="e27-map e27-map-college-only">
       <AjustarMapa data={data} />
+      <CentrarPoligonoColegio data={data} colegioSeleccionado={colegioSeleccionado} />
       <GeoJSON
         data={data as never}
         style={(feature) => {
           const name = String((feature?.properties as any)?.nombre || '');
           const isSelected = Boolean(seleccionado) && normalizarNombreColegio(name) === seleccionado;
           return {
-            color: isSelected ? '#087f9f' : '#6aaecb',
-            weight: isSelected ? 4 : 1.6,
-            fillColor: isSelected ? '#35b6d5' : '#a9dff0',
-            fillOpacity: isSelected ? 0.62 : 0.28,
+            color: isSelected ? '#087f9f' : '#a8b7c2',
+            weight: isSelected ? 1.45 : 0.7,
+            fillColor: isSelected ? '#65c9e2' : '#f7fafc',
+            fillOpacity: isSelected ? 0.48 : 0.34,
             opacity: 1,
             interactive: true,
             className: isSelected ? 'e27-college-polygon e27-college-polygon-selected' : 'e27-college-polygon',
@@ -347,6 +393,8 @@ export default function Elecciones2027() {
   const [circuitoResultadoSeleccionado, setCircuitoResultadoSeleccionado] = useState('');
   const [colegioSeleccionadoPublico, setColegioSeleccionadoPublico] = useState('');
   const [colegioPoligonoSeleccionado, setColegioPoligonoSeleccionado] = useState('');
+  const [busquedaColegio, setBusquedaColegio] = useState('');
+  const [mostrarResultadosBusquedaColegio, setMostrarResultadosBusquedaColegio] = useState(false);
   const [errorDatosPublicos, setErrorDatosPublicos] = useState('');
   const [rolElegido, setRolElegido] = useState<'administrador_general' | 'responsable_escuela'>('administrador_general');
   const [errorMunicipio, setErrorMunicipio] = useState('');
@@ -364,7 +412,26 @@ export default function Elecciones2027() {
   const [blancos, setBlancos] = useState('0');
   const [nulos, setNulos] = useState('0');
   const [estadoConexion, setEstadoConexion] = useState<'comprobando' | 'conectado' | 'error'>('comprobando');
-  const [seccionAdmin, setSeccionAdmin] = useState<'inicio' | 'responsables' | 'partidos' | 'escrutinio'>('inicio');
+  const [seccionAdmin, setSeccionAdmin] = useState<'inicio' | 'responsables' | 'usuarios' | 'partidos' | 'colegios' | 'escrutinio'>('inicio');
+  const [colegioEditandoId, setColegioEditandoId] = useState<string | null>(null);
+  const [colegioNombreEditado, setColegioNombreEditado] = useState('');
+  const [guardandoColegio, setGuardandoColegio] = useState<string | null>(null);
+  const [cantidadColegiosActivos, setCantidadColegiosActivos] = useState(0);
+  const [cantidadColegiosCartografiados, setCantidadColegiosCartografiados] = useState(0);
+  const [cantidadMesasActivas, setCantidadMesasActivas] = useState(0);
+  const [guardandoAltaResponsable, setGuardandoAltaResponsable] = useState(false);
+  const [cuentaCreadaEmail, setCuentaCreadaEmail] = useState('');
+  const [responsablePassword, setResponsablePassword] = useState('');
+  const [confirmarResponsablePassword, setConfirmarResponsablePassword] = useState('');
+  const [usuariosAdmin, setUsuariosAdmin] = useState<UsuarioAdmin[]>([]);
+  const [cargandoUsuariosAdmin, setCargandoUsuariosAdmin] = useState(false);
+  const [usuarioPasswordEditando, setUsuarioPasswordEditando] = useState<string | null>(null);
+  const [nuevaPasswordUsuario, setNuevaPasswordUsuario] = useState('');
+  const [confirmarNuevaPasswordUsuario, setConfirmarNuevaPasswordUsuario] = useState('');
+  const [guardandoPasswordUsuario, setGuardandoPasswordUsuario] = useState<string | null>(null);
+  const [usuarioMesasEditando, setUsuarioMesasEditando] = useState<string | null>(null);
+  const [cantidadMesasUsuario, setCantidadMesasUsuario] = useState<Record<string, string>>({});
+  const [guardandoMesasUsuario, setGuardandoMesasUsuario] = useState<string | null>(null);
   const [pestanaEscrutinio, setPestanaEscrutinio] = useState<'carga' | 'pendientes' | 'publicados'>('carga');
   const [circuitoDashboard, setCircuitoDashboard] = useState('');
   const [responsableNombre, setResponsableNombre] = useState('');
@@ -372,17 +439,16 @@ export default function Elecciones2027() {
   const [responsableColegio, setResponsableColegio] = useState('');
   const [responsableCantidadMesas, setResponsableCantidadMesas] = useState('1');
   const [responsableMesasConfig, setResponsableMesasConfig] = useState<MesaConfiguracion[]>([{ numero: '1' }]);
-  const [responsableVistaPrevia, setResponsableVistaPrevia] = useState(false);
   const [electoresPorMesa, setElectoresPorMesa] = useState<Record<string, string>>({});
   const [guardandoElectoresMesa, setGuardandoElectoresMesa] = useState<string | null>(null);
   const [partidoNombre, setPartidoNombre] = useState('');
   const [partidoSigla, setPartidoSigla] = useState('');
   const [partidoColor, setPartidoColor] = useState('#2563eb');
+  const [guardandoPartido, setGuardandoPartido] = useState(false);
 
   const cambiarCantidadMesasResponsable = (valor: string) => {
     setResponsableCantidadMesas(valor);
-    setResponsableVistaPrevia(false);
-    const cantidad = Number(valor);
+        const cantidad = Number(valor);
     if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 100) {
       setResponsableMesasConfig([]);
       return;
@@ -395,15 +461,30 @@ export default function Elecciones2027() {
   };
 
   const actualizarMesaResponsable = (indice: number, campo: keyof MesaConfiguracion, valor: string) => {
-    setResponsableVistaPrevia(false);
-    setResponsableMesasConfig((actuales) => actuales.map((mesa, i) =>
+        setResponsableMesasConfig((actuales) => actuales.map((mesa, i) =>
       i === indice ? { ...mesa, [campo]: valor } : mesa
     ));
   };
 
-  const previsualizarAltaResponsable = (e: FormEvent<HTMLFormElement>) => {
+  const crearResponsableEnSupabase = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (perfil?.rol !== 'administrador_general') {
+      setMensaje('Solo el Administrador General puede crear responsables.');
+      return;
+    }
     const cantidad = Number(responsableCantidadMesas);
+    if (!responsableNombre.trim() || !responsableEmail.trim() || !responsableColegio) {
+      setMensaje('Completá nombre, correo y establecimiento.');
+      return;
+    }
+    if (responsablePassword.length < 12) {
+      setMensaje('La contraseña inicial debe tener al menos 12 caracteres.');
+      return;
+    }
+    if (responsablePassword !== confirmarResponsablePassword) {
+      setMensaje('Las contraseñas iniciales no coinciden.');
+      return;
+    }
     if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 100 || responsableMesasConfig.length !== cantidad) {
       setMensaje('Ingresá una cantidad de mesas válida, entre 1 y 100.');
       return;
@@ -417,8 +498,116 @@ export default function Elecciones2027() {
       setMensaje('No puede haber números de mesa repetidos dentro del mismo establecimiento.');
       return;
     }
-    setMensaje('Vista previa lista. Se definieron los números de mesa; el responsable completará los electores habilitados desde su cuenta. El alta y la asignación todavía no se guardaron en Supabase.');
-    setResponsableVistaPrevia(true);
+
+    setGuardandoAltaResponsable(true);
+    setCuentaCreadaEmail('');
+    setMensaje('Creando la cuenta y guardando las mesas en Supabase…');
+    try {
+      const { data, error: functionError } = await supabase.functions.invoke('dynamic-elecciones-crear-responsable', {
+        body: {
+          nombre: responsableNombre.trim().replace(/\s+/g, ' '),
+          email: responsableEmail.trim().toLowerCase(),
+          password: responsablePassword,
+          colegio_id: responsableColegio,
+          mesas: numeros,
+        },
+      });
+      if (functionError) {
+        throw new Error(`No se pudo ejecutar la función segura. Verificá que elecciones-crear-responsable esté desplegada con la versión nueva. ${functionError.message}`);
+      }
+      if (!data?.success) {
+        throw new Error(data?.error || 'La función no confirmó la creación de la cuenta.');
+      }
+      setCuentaCreadaEmail(responsableEmail.trim().toLowerCase());
+      setMensaje(`Cuenta creada para ${responsableEmail.trim()}. Se guardaron ${numeros.length} mesas y la asignación del establecimiento. La contraseña inicial es la que acabás de definir; entregala por un canal privado.`);
+      setResponsableNombre('');
+      setResponsableEmail('');
+      setResponsablePassword('');
+      setConfirmarResponsablePassword('');
+      await cargarPerfil(perfil.user_id);
+      await cargarPublico();
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : 'No se pudo crear el responsable.');
+    } finally {
+      setGuardandoAltaResponsable(false);
+    }
+  };
+
+  const cargarUsuariosAdmin = useCallback(async () => {
+    if (perfil?.rol !== 'administrador_general') return;
+    setCargandoUsuariosAdmin(true);
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: { action: 'listar' },
+      });
+      if (invokeError) throw new Error(invokeError.message);
+      if (!data?.success) throw new Error(data?.error || 'No se pudo cargar el listado de usuarios.');
+      setUsuariosAdmin((data.usuarios ?? []) as UsuarioAdmin[]);
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : 'No se pudo cargar el listado de usuarios.');
+    } finally {
+      setCargandoUsuariosAdmin(false);
+    }
+  }, [perfil]);
+
+  useEffect(() => {
+    if (perfil?.rol === 'administrador_general' && seccionAdmin === 'usuarios') {
+      void cargarUsuariosAdmin();
+    }
+  }, [perfil, seccionAdmin, cargarUsuariosAdmin]);
+
+  const guardarPasswordUsuario = async (userId: string) => {
+    if (nuevaPasswordUsuario.length < 12) {
+      setMensaje('La nueva contraseña debe tener al menos 12 caracteres.');
+      return;
+    }
+    if (nuevaPasswordUsuario !== confirmarNuevaPasswordUsuario) {
+      setMensaje('Las nuevas contraseñas no coinciden.');
+      return;
+    }
+    setGuardandoPasswordUsuario(userId);
+    setMensaje('');
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: { action: 'cambiar_password', user_id: userId, password: nuevaPasswordUsuario },
+      });
+      if (invokeError) throw new Error(invokeError.message);
+      if (!data?.success) throw new Error(data?.error || 'No se pudo cambiar la contraseña.');
+      setUsuarioPasswordEditando(null);
+      setNuevaPasswordUsuario('');
+      setConfirmarNuevaPasswordUsuario('');
+      setMensaje('La contraseña se actualizó correctamente.');
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : 'No se pudo cambiar la contraseña.');
+    } finally {
+      setGuardandoPasswordUsuario(null);
+    }
+  };
+
+  const guardarCantidadMesasDeUsuario = async (userId: string, colegioId: string) => {
+    const key = `${userId}:${colegioId}`;
+    const cantidad = Number(cantidadMesasUsuario[key]);
+    if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > 100) {
+      setMensaje('La cantidad de mesas debe ser un número entero entre 1 y 100.');
+      return;
+    }
+    setGuardandoMesasUsuario(key);
+    setMensaje('');
+    try {
+      const { data, error: invokeError } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: { action: 'actualizar_mesas', user_id: userId, colegio_id: colegioId, cantidad },
+      });
+      if (invokeError) throw new Error(invokeError.message);
+      if (!data?.success) throw new Error(data?.error || 'No se pudo actualizar la cantidad de mesas.');
+      setMensaje(data.mensaje || 'Se actualizó la cantidad de mesas del establecimiento.');
+      setUsuarioMesasEditando(null);
+      await cargarUsuariosAdmin();
+      await cargarPublico();
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : 'No se pudo actualizar la cantidad de mesas.');
+    } finally {
+      setGuardandoMesasUsuario(null);
+    }
   };
 
   const cargarPublico = useCallback(async () => {
@@ -429,29 +618,40 @@ export default function Elecciones2027() {
         if (!r.ok) throw new Error(`No se encontró ${municipioUrl}. Colocá el archivo en public/la-matanza-municipio.geojson.`);
         return r.json();
       }).catch((e) => { setErrorMunicipio(e instanceof Error ? e.message : 'No se pudo cargar el polígono municipal.'); return null; }),
-      fetch('/circuitos-la-matanza.geojson').then(async (r) => {
+      fetch(`${import.meta.env.BASE_URL}circuitos-la-matanza.geojson`).then(async (r) => {
         if (!r.ok) throw new Error('No se encontró public/circuitos-la-matanza.geojson');
         return r.json();
       }).catch((e) => { setMensaje(e instanceof Error ? e.message : 'No se pudo cargar la cartografía de circuitos.'); return null; }),
       supabase.from('elecciones_partidos').select('id,nombre,sigla,color').eq('activo', true),
-      supabase.from('elecciones_colegios').select('id,nombre,circuito').eq('activo', true).order('nombre'),
+      supabase.from('elecciones_colegios').select('id,nombre,nombre_normalizado,identificador_kml,circuito').eq('activo', true).order('nombre'),
       supabase.from('elecciones_mesas').select('id,numero,electores_habilitados,colegio_id').eq('activo', true).order('numero'),
       supabase.from('elecciones_reportes_escrutinio')
-        .select('id,mesa_id,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(votos,partido_id,elecciones_partidos(id,nombre,color)),elecciones_mesas(id,numero,colegio_id,elecciones_colegios(id,nombre,circuito))')
+        .select('id,mesa_id,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(votos,partido_id,elecciones_partidos(id,nombre,color)),elecciones_mesas(id,numero,colegio_id,elecciones_colegios(id,nombre,nombre_normalizado,identificador_kml,circuito))')
         .eq('estado', 'publicado'),
       supabase.from('elecciones_reportes_participacion')
-        .select('id,mesa_id,elecciones_participacion_franjas(votantes,hora),elecciones_mesas(id,numero,colegio_id,electores_habilitados,elecciones_colegios(id,nombre,circuito))')
+        .select('id,mesa_id,elecciones_participacion_franjas(votantes,hora),elecciones_mesas(id,numero,colegio_id,electores_habilitados,elecciones_colegios(id,nombre,nombre_normalizado,identificador_kml,circuito))')
         .eq('estado', 'publicado'),
     ]);
 
     if (mapaResponse?.features) setMunicipio(mapaResponse);
     if (circuitosResponse?.features) setCircuitosGeo(circuitosResponse);
-    fetch('/COLEGIOS%20OCTUBRE%202025.kml')
+    fetch(`${import.meta.env.BASE_URL}COLEGIOS%20OCTUBRE%202025.kml`)
       .then((r) => r.ok ? r.text() : Promise.reject(new Error('No se encontró el KML')))
       .then((raw) => setColegiosKml(convertirKml(raw)))
       .catch((e) => setMensaje(e.message || 'No se pudo cargar el KML.'));
 
     if (!partidosResponse.error && partidosResponse.data) setPartidos(partidosResponse.data as Partido[]);
+    // El conteo oficial se obtiene desde una vista SQL calculada sobre las tablas reales.
+    const { data: resumenDB, error: resumenError } = await supabase
+      .from('elecciones_resumen_general')
+      .select('colegios_activos,colegios_cartografiados,mesas_activas')
+      .maybeSingle();
+    if (!resumenError && resumenDB) {
+      setCantidadColegiosActivos(Number(resumenDB.colegios_activos || 0));
+      setCantidadColegiosCartografiados(Number(resumenDB.colegios_cartografiados || 0));
+      setCantidadMesasActivas(Number(resumenDB.mesas_activas || 0));
+    }
+
     if (!colegiosPublicosResponse.error && colegiosPublicosResponse.data) {
       const lista = colegiosPublicosResponse.data as Colegio[];
       setColegiosPublicos(lista);
@@ -480,6 +680,7 @@ export default function Elecciones2027() {
       mesasPublicasResponse.error,
       reportesResponse.error,
       participacionResponse.error,
+      resumenError,
     ].filter(Boolean);
     if (erroresLectura.length) {
       setErrorDatosPublicos('No se pudieron consultar todos los datos públicos. Revisá los permisos de lectura de colegios, mesas y reportes publicados en Supabase.');
@@ -603,7 +804,7 @@ export default function Elecciones2027() {
     if (p.rol === 'responsable_escuela') {
       const { data: asignaciones, error: asignacionError } = await supabase
         .from('elecciones_usuario_colegios')
-        .select('colegio_id,elecciones_colegios(id,nombre,circuito)')
+        .select('colegio_id,elecciones_colegios(id,nombre,nombre_normalizado,identificador_kml,circuito)')
         .eq('user_id', userId);
       if (asignacionError) throw asignacionError;
       const asignados = ((asignaciones ?? []) as unknown as Asignacion[]).map((a) =>
@@ -631,12 +832,23 @@ export default function Elecciones2027() {
     } else {
       const { data: colegiosAdmin, error: colegiosError } = await supabase
         .from('elecciones_colegios')
-        .select('id,nombre,circuito')
+        .select('id,nombre,nombre_normalizado,identificador_kml,circuito')
         .eq('activo', true)
         .order('circuito', { ascending: true })
         .order('nombre', { ascending: true });
       if (colegiosError) throw colegiosError;
       setColegios((colegiosAdmin ?? []) as Colegio[]);
+      setCantidadColegiosActivos((colegiosAdmin ?? []).length);
+      setCantidadColegiosCartografiados((colegiosAdmin ?? []).filter((colegio: any) => Boolean(colegio.identificador_kml)).length);
+      const { data: resumenAdmin } = await supabase
+        .from('elecciones_resumen_general')
+        .select('colegios_activos,colegios_cartografiados,mesas_activas')
+        .maybeSingle();
+      if (resumenAdmin) {
+        setCantidadColegiosActivos(Number(resumenAdmin.colegios_activos || 0));
+        setCantidadColegiosCartografiados(Number(resumenAdmin.colegios_cartografiados || 0));
+        setCantidadMesasActivas(Number(resumenAdmin.mesas_activas || 0));
+      }
       setMesas([]);
       setElectoresPorMesa({});
     }
@@ -673,7 +885,7 @@ export default function Elecciones2027() {
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!session) {
-        setPerfil(null); setColegios([]); setMesas([]); setReportes([]); setElectoresPorMesa({}); setGuardandoElectoresMesa(null);
+        setPerfil(null); setColegios([]); setMesas([]); setReportes([]); setElectoresPorMesa({}); setGuardandoElectoresMesa(null); setCantidadColegiosActivos(0); setCantidadColegiosCartografiados(0); setCantidadMesasActivas(0);
       }
     });
     return () => { vigente = false; listener.subscription.unsubscribe(); };
@@ -707,8 +919,99 @@ export default function Elecciones2027() {
 
   const cerrarSesion = async () => {
     await supabase.auth.signOut();
-    setPerfil(null); setColegios([]); setMesas([]); setReportes([]); setElectoresPorMesa({});
+    setPerfil(null); setColegios([]); setMesas([]); setReportes([]); setElectoresPorMesa({}); setCantidadColegiosActivos(0); setCantidadColegiosCartografiados(0); setCantidadMesasActivas(0);
     setMensaje('Sesión cerrada.');
+  };
+
+  const guardarNombreColegio = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const colegioId = colegioEditandoId;
+    const nombreNuevo = colegioNombreEditado.trim().replace(/\s+/g, ' ');
+    if (!colegioId) return;
+    if (nombreNuevo.length < 3) {
+      setMensaje('El nombre del establecimiento debe tener al menos 3 caracteres.');
+      return;
+    }
+    const colegioActual = colegios.find((colegio) => colegio.id === colegioId);
+    if (!colegioActual) {
+      setMensaje('No se encontró el establecimiento que querés editar. Actualizá la lista e intentá nuevamente.');
+      return;
+    }
+    const normalizadoNuevo = normalizarNombreColegio(nombreNuevo);
+    const repetido = colegios.some((colegio) =>
+      colegio.id !== colegioId && normalizarNombreColegio(colegio.nombre) === normalizadoNuevo
+    );
+    if (repetido) {
+      setMensaje('Ya existe otro establecimiento con ese nombre. Revisá el listado antes de guardar.');
+      return;
+    }
+
+    setGuardandoColegio(colegioId);
+    setMensaje('');
+    try {
+      // Solo se modifica el nombre visible. identificador_kml permanece intacto.
+      const payload = { nombre: nombreNuevo };
+      const { data, error: updateError } = await supabase
+        .from('elecciones_colegios')
+        .update(payload)
+        .eq('id', colegioId)
+        .select('id,nombre,nombre_normalizado,identificador_kml,circuito')
+        .single();
+      if (updateError) {
+        if (updateError.code === '42501' || /permission|policy|rls/i.test(updateError.message)) {
+          throw new Error('Supabase no autorizó el cambio. Ejecutá primero el SQL de permisos para que solo el Administrador General pueda renombrar colegios.');
+        }
+        throw new Error(updateError.message);
+      }
+      const actualizado = data as Colegio;
+      setColegios((actuales) => actuales.map((colegio) => colegio.id === colegioId ? actualizado : colegio));
+      setColegiosPublicos((actuales) => actuales.map((colegio) => colegio.id === colegioId ? actualizado : colegio));
+      setColegioEditandoId(null);
+      setColegioNombreEditado('');
+      setMensaje(`Se actualizó el nombre del establecimiento: ${actualizado.nombre}.`);
+      await cargarPublico();
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : 'No se pudo actualizar el nombre del establecimiento.');
+    } finally {
+      setGuardandoColegio(null);
+    }
+  };
+
+  const guardarPartidoEnSupabase = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (perfil?.rol !== 'administrador_general') {
+      setMensaje('Solo el Administrador General puede administrar partidos.');
+      return;
+    }
+    const nombre = partidoNombre.trim().replace(/\s+/g, ' ');
+    const sigla = partidoSigla.trim().toUpperCase();
+    if (nombre.length < 3 || !sigla) {
+      setMensaje('Ingresá el nombre y la sigla del partido.');
+      return;
+    }
+    setGuardandoPartido(true);
+    setMensaje('');
+    try {
+      const { data, error: insertError } = await supabase
+        .from('elecciones_partidos')
+        .insert({ nombre, sigla, color: partidoColor, activo: true, orden: partidos.length + 1 })
+        .select('id,nombre,sigla,color')
+        .single();
+      if (insertError) {
+        if (insertError.code === '23505') throw new Error('Ya existe un partido con ese nombre o sigla.');
+        if (insertError.code === '42501') throw new Error('Supabase no autorizó el alta. Revisá la política de Administrador General.');
+        throw insertError;
+      }
+      setPartidos((actuales) => [...actuales, data as Partido].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es')));
+      setPartidoNombre('');
+      setPartidoSigla('');
+      setPartidoColor('#168eae');
+      setMensaje(`El partido ${nombre} quedó guardado en Supabase.`);
+    } catch (err) {
+      setMensaje(err instanceof Error ? err.message : 'No se pudo guardar el partido.');
+    } finally {
+      setGuardandoPartido(false);
+    }
   };
 
   const aprobarReporte = async (r: ReportePendiente) => {
@@ -831,17 +1134,40 @@ export default function Elecciones2027() {
     setCargando(true);
     setMensaje('');
     try {
-      const { data: reporte, error: repError } = await supabase
+      // No se vuelve a poner el reporte en 'pendiente' cuando ya existe.
+      // Si fue publicado, las correcciones horarias conservan ese estado y
+      // se reflejan directamente en los porcentajes públicos.
+      const { data: reporteExistente, error: consultaReporteError } = await supabase
         .from('elecciones_reportes_participacion')
-        .upsert({ mesa_id: mesaActiva.id, user_id: perfil.user_id }, { onConflict: 'mesa_id' })
-        .select('id')
-        .single();
-      if (repError) throw repError;
+        .select('id,user_id,estado')
+        .eq('mesa_id', mesaActiva.id)
+        .maybeSingle();
+      if (consultaReporteError) throw consultaReporteError;
 
+      let reporteId: string;
+      let estadoReporte: string;
+      if (reporteExistente) {
+        if (reporteExistente.user_id !== perfil.user_id) {
+          throw new Error('Esta mesa ya tiene un reporte asociado a otro usuario. Pedile al Administrador General que revise la asignación.');
+        }
+        reporteId = reporteExistente.id;
+        estadoReporte = reporteExistente.estado;
+      } else {
+        const { data: nuevoReporte, error: nuevoReporteError } = await supabase
+          .from('elecciones_reportes_participacion')
+          .insert({ mesa_id: mesaActiva.id, user_id: perfil.user_id, estado: 'pendiente' })
+          .select('id,estado')
+          .single();
+        if (nuevoReporteError) throw nuevoReporteError;
+        reporteId = nuevoReporte.id;
+        estadoReporte = nuevoReporte.estado;
+      }
+
+      const yaExistiaLaFranja = franjasGuardadas[franjaHora] !== undefined;
       const { error: franjaError } = await supabase
         .from('elecciones_participacion_franjas')
         .upsert(
-          { reporte_id: reporte.id, hora: franjaHora, votantes: cantidad },
+          { reporte_id: reporteId, hora: franjaHora, votantes: cantidad },
           { onConflict: 'reporte_id,hora' },
         );
       if (franjaError) throw franjaError;
@@ -850,7 +1176,11 @@ export default function Elecciones2027() {
       const porcentaje = electoresHabilitados > 0
         ? Math.round((cantidad / electoresHabilitados) * 100)
         : 0;
-      setMensaje(`Registro de las ${franjaHora} guardado. ${cantidad.toLocaleString('es-AR')} de ${electoresHabilitados.toLocaleString('es-AR')} electores (${porcentaje}%). Quedó enviado para revisión.`);
+      const accion = yaExistiaLaFranja ? 'actualizado' : 'guardado';
+      const seguimiento = estadoReporte === 'publicado'
+        ? 'La corrección ya se refleja en los datos publicados.'
+        : 'El registro quedó enviado para revisión de la administración.';
+      setMensaje(`Registro de las ${franjaHora} ${accion}. ${cantidad.toLocaleString('es-AR')} de ${electoresHabilitados.toLocaleString('es-AR')} electores (${porcentaje}%). ${seguimiento}`);
     } catch (err) {
       setMensaje(err instanceof Error ? `No se pudo guardar la participación: ${err.message}` : 'No se pudo guardar la participación.');
     } finally {
@@ -868,6 +1198,7 @@ export default function Elecciones2027() {
         .upsert({
           mesa_id: mesaActiva.id,
           user_id: perfil.user_id,
+          estado: 'pendiente',
           votos_blancos: Number(blancos || 0),
           votos_nulos: Number(nulos || 0),
         }, { onConflict: 'mesa_id' })
@@ -982,15 +1313,51 @@ export default function Elecciones2027() {
   const votosBlancosCircuito = mesasCircuitoResultados.reduce((total, mesa) => total + (escrutinioPublicoPorMesa.get(mesa.id)?.votos_blancos || 0), 0);
   const votosNulosCircuito = mesasCircuitoResultados.reduce((total, mesa) => total + (escrutinioPublicoPorMesa.get(mesa.id)?.votos_nulos || 0), 0);
   const totalVotosEscrutadosCircuito = totalVotosPartidosCircuito + votosBlancosCircuito + votosNulosCircuito;
+  const resultadosVotosCircuito = [
+    ...partidosCircuitoResultados.map((partido) => ({
+      key: partido.partido_id,
+      nombre: partido.nombre,
+      color: partido.color,
+      votos: partido.votos,
+    })),
+    { key: 'votos-blancos', nombre: 'Votos en blanco', color: '#64748b', votos: votosBlancosCircuito },
+    { key: 'votos-nulos', nombre: 'Votos nulos', color: '#8b5cf6', votos: votosNulosCircuito },
+  ].filter((item) => item.votos > 0);
+
+  const seleccionarColegioPublico = (colegio: Colegio) => {
+    const identificadorPoligono = String(
+      colegio.identificador_kml || colegio.nombre_normalizado || colegio.nombre
+    ).trim();
+    setColegioSeleccionadoPublico(colegio.id);
+    setColegioPoligonoSeleccionado(identificadorPoligono);
+    setBusquedaColegio(colegio.nombre);
+    setMostrarResultadosBusquedaColegio(false);
+  };
 
   const seleccionarPoligonoColegio = (nombrePoligono: string) => {
     setColegioPoligonoSeleccionado(nombrePoligono);
     const nombreNormalizado = normalizarNombreColegio(nombrePoligono);
-    const coincidencia = colegiosPublicos.find(
-      (colegio) => normalizarNombreColegio(colegio.nombre) === nombreNormalizado,
-    );
+    const coincidencia = colegiosPublicos.find((colegio) => {
+      const nombreKmlEstable = String(colegio.identificador_kml || colegio.nombre_normalizado || '').trim();
+      return nombreKmlEstable === nombreNormalizado || normalizarNombreColegio(colegio.nombre) === nombreNormalizado;
+    });
     setColegioSeleccionadoPublico(coincidencia?.id || '');
+    setBusquedaColegio(coincidencia?.nombre || nombrePoligono);
+    setMostrarResultadosBusquedaColegio(false);
   };
+
+  const colegiosFiltradosPorBusqueda = useMemo(() => {
+    const consulta = normalizarNombreColegio(busquedaColegio);
+    if (!consulta) return [];
+    return colegiosPublicos
+      .filter((colegio) => {
+        const nombre = normalizarNombreColegio(colegio.nombre);
+        const circuito = normalizarNombreColegio(String(colegio.circuito || ''));
+        return nombre.includes(consulta) || circuito.includes(consulta);
+      })
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+      .slice(0, 8);
+  }, [colegiosPublicos, busquedaColegio]);
 
   const colegioPublicoActivo = colegiosPublicos.find((colegio) => colegio.id === colegioSeleccionadoPublico) || null;
   const mesasDelColegio = useMemo(
@@ -998,19 +1365,75 @@ export default function Elecciones2027() {
     [mesasPublicas, colegioSeleccionadoPublico],
   );
   const mesasColegioConParticipacion = mesasDelColegio.filter((mesa) => participacionPublicaPorMesa.has(mesa.id)).length;
+  const mesasColegioConEscrutinio = mesasDelColegio.filter(
+    (mesa) => escrutinioPublicoPorMesa.has(mesa.id)
+  ).length;
+  
+  const porcentajeMesasEscrutadasColegio = mesasDelColegio.length
+    ? (mesasColegioConEscrutinio / mesasDelColegio.length) * 100
+    : 0;
   const votantesColegio = mesasDelColegio.reduce((total, mesa) => total + (participacionPublicaPorMesa.get(mesa.id)?.votantes || 0), 0);
   const habilitadosColegio = mesasDelColegio.reduce((total, mesa) => total + Number(mesa.electores_habilitados || 0), 0);
   const porcentajeColegio = habilitadosColegio > 0 ? Math.min(100, votantesColegio / habilitadosColegio * 100) : 0;
   const partidosColegio = sumarPartidos(mesasDelColegio);
   const totalVotosColegio = partidosColegio.reduce((total, partido) => total + partido.votos, 0);
+  const votosBlancosColegio = mesasDelColegio.reduce(
+    (total, mesa) => total + (escrutinioPublicoPorMesa.get(mesa.id)?.votos_blancos || 0),
+    0,
+  );
+  const votosNulosColegio = mesasDelColegio.reduce(
+    (total, mesa) => total + (escrutinioPublicoPorMesa.get(mesa.id)?.votos_nulos || 0),
+    0,
+  );
+  const totalVotosEscrutadosColegio =
+    totalVotosColegio + votosBlancosColegio + votosNulosColegio;
 
   const mesasActivasMunicipio = mesasPublicas;
   const votantesMunicipio = mesasActivasMunicipio.reduce((total, mesa) => total + (participacionPublicaPorMesa.get(mesa.id)?.votantes || 0), 0);
   const habilitadosMunicipio = mesasActivasMunicipio.reduce((total, mesa) => total + Number(mesa.electores_habilitados || 0), 0);
   const porcentajeMunicipio = habilitadosMunicipio > 0 ? Math.min(100, votantesMunicipio / habilitadosMunicipio * 100) : 0;
   const mesasMunicipioConParticipacion = mesasActivasMunicipio.filter((mesa) => participacionPublicaPorMesa.has(mesa.id)).length;
+  const circuitosActivosMunicipio = new Set(
+    colegiosPublicos.map((colegio) => String(colegio.circuito || '').trim()).filter(Boolean)
+  ).size;
   const partidosMunicipio = sumarPartidos(mesasActivasMunicipio);
   const totalVotosMunicipio = partidosMunicipio.reduce((total, partido) => total + partido.votos, 0);
+  const votosBlancosMunicipio = mesasActivasMunicipio.reduce(
+    (total, mesa) => total + (escrutinioPublicoPorMesa.get(mesa.id)?.votos_blancos || 0), 0,
+  );
+  const votosNulosMunicipio = mesasActivasMunicipio.reduce(
+    (total, mesa) => total + (escrutinioPublicoPorMesa.get(mesa.id)?.votos_nulos || 0), 0,
+  );
+  const totalVotosEscrutadosMunicipio = totalVotosMunicipio + votosBlancosMunicipio + votosNulosMunicipio;
+  const resultadosVotosMunicipio = [
+    ...partidosMunicipio.map((partido) => ({
+      key: partido.partido_id,
+      nombre: partido.nombre,
+      color: partido.color,
+      votos: partido.votos,
+    })),
+    { key: 'votos-blancos', nombre: 'Votos en blanco', color: '#64748b', votos: votosBlancosMunicipio },
+    { key: 'votos-nulos', nombre: 'Votos nulos', color: '#8b5cf6', votos: votosNulosMunicipio },
+  ].filter((item) => item.votos > 0);
+  const mesasMunicipioConEscrutinio = mesasActivasMunicipio.filter((mesa) => escrutinioPublicoPorMesa.has(mesa.id)).length;
+  const porcentajeMesasCerradasMunicipio = mesasActivasMunicipio.length
+    ? (mesasMunicipioConEscrutinio / mesasActivasMunicipio.length) * 100
+    : 0;
+  const avanceCierrePorCircuito = CIRCUITOS_ELECTORALES.map((codigo) => {
+    const idsColegios = new Set(
+      colegiosPublicos
+        .filter((colegio) => String(colegio.circuito || '').trim() === codigo)
+        .map((colegio) => colegio.id)
+    );
+    const mesasDelCircuito = mesasActivasMunicipio.filter((mesa) => idsColegios.has(mesa.colegio_id));
+    const cerradas = mesasDelCircuito.filter((mesa) => escrutinioPublicoPorMesa.has(mesa.id)).length;
+    return {
+      codigo,
+      total: mesasDelCircuito.length,
+      cerradas,
+      porcentaje: mesasDelCircuito.length ? (cerradas / mesasDelCircuito.length) * 100 : 0,
+    };
+  });
 
   const colegioPorId = useMemo(() => Object.fromEntries(colegios.map((c) => [c.id, c])), [colegios]);
   const electoresMesaActiva = Number(mesaActiva?.electores_habilitados || 0);
@@ -1087,37 +1510,157 @@ export default function Elecciones2027() {
                   <article><small>VOTANTES REGISTRADOS</small><strong>{numeroAR(votantesMunicipio)}</strong></article>
                   <article><small>MESAS CON PARTICIPACIÓN</small><strong>{numeroAR(mesasMunicipioConParticipacion)} / {numeroAR(mesasActivasMunicipio.length)}</strong></article>
                 </div>
-                <div className="e27-party-results-heading"><div><span className="e27-kicker">ESCRUTINIO PUBLICADO</span><h3>Resultados por partido</h3></div><small>{numeroAR(totalVotosMunicipio)} votos partidarios</small></div>
-                {partidosMunicipio.length ? (
+                <div className="e27-party-results-heading"><div><span className="e27-kicker">ESCRUTINIO PUBLICADO</span><h3>Distribución de votos escrutados</h3></div><small>{numeroAR(totalVotosEscrutadosMunicipio)} votos escrutados</small></div>
+                {resultadosVotosMunicipio.length ? (
                   <div className="e27-party-results-list">
-                    {partidosMunicipio.map((partido) => (
-                      <article className="e27-party-result" key={partido.partido_id}>
-                        <div className="e27-party-result-line"><span><i style={{ background: partido.color }} />{partido.nombre}</span><strong>{totalVotosMunicipio ? `${(partido.votos / totalVotosMunicipio * 100).toFixed(1)}%` : '0%'}</strong></div>
-                        <div className="e27-party-result-track"><span style={{ width: `${totalVotosMunicipio ? partido.votos / totalVotosMunicipio * 100 : 0}%`, background: partido.color }} /></div>
-                        <small>{numeroAR(partido.votos)} votos</small>
-                      </article>
-                    ))}
+                    {resultadosVotosMunicipio.map((item) => {
+                      const porcentaje = totalVotosEscrutadosMunicipio > 0
+                        ? (item.votos / totalVotosEscrutadosMunicipio) * 100
+                        : 0;
+                      return (
+                        <article className="e27-party-result" key={item.key}>
+                          <div className="e27-party-result-line"><span><i style={{ background: item.color }} />{item.nombre}</span><strong>{porcentaje.toFixed(1)}%</strong></div>
+                          <div className="e27-party-result-track"><span style={{ width: `${Math.min(100, porcentaje)}%`, background: item.color }} /></div>
+                          <small>{numeroAR(item.votos)} votos</small>
+                        </article>
+                      );
+                    })}
                   </div>
-                ) : <div className="e27-empty-state"><strong>Todavía no hay escrutinios publicados</strong><span>Los resultados por partido aparecerán cuando se aprueben las cargas de las mesas.</span></div>}
+                ) : <div className="e27-empty-state"><strong>Todavía no hay escrutinios publicados</strong><span>Los resultados aparecerán cuando se aprueben las cargas de las mesas.</span></div>}
                 {errorDatosPublicos && <div className="e27-public-data-warning">{errorDatosPublicos}</div>}
               </aside>
             </div>
           ) : vista === 'colegios' ? (
-            <div className="e27-public-split e27-college-layout">
-              <section className="e27-panel e27-public-map-panel">
-                <div className="e27-panel-heading"><div><span className="e27-kicker">CARTOGRAFÍA DE ESTABLECIMIENTOS</span><h2>Mapa de colegios</h2><p>Hacé clic directamente sobre el polígono de un colegio o elegilo en el panel lateral.</p></div><span className="e27-map-label">SOLO POLÍGONOS DE COLEGIOS</span></div>
-                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} colegioSeleccionado={colegioPublicoActivo?.nombre || colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
+            <div
+              className="e27-public-split e27-college-layout"
+              style={{ alignItems: 'stretch' }}
+            >
+              <section
+                className="e27-panel e27-public-map-panel"
+                style={{
+                  minWidth: 0,
+                  minHeight: 'fit-content',
+                  boxSizing: 'border-box',
+                }}
+              >
+                <div className="e27-panel-heading e27-college-map-heading">
+                  <div>
+                    <span className="e27-kicker">CARTOGRAFÍA DE ESTABLECIMIENTOS</span>
+                    <h2>Mapa de colegios</h2>
+                    <p>Hacé clic directamente sobre el polígono de un colegio o elegilo en el panel lateral.</p>
+                  </div>
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'flex-end',
+                    gap: '7px',
+                    flexShrink: 0,
+                  }}>
+                    <span className="e27-map-label">SOLO POLÍGONOS DE COLEGIOS</span>
+                    <div style={{
+                      background: '#ffffff',
+                      border: '1px solid #b8ddeb',
+                      borderRadius: '14px',
+                      padding: '14px 16px',
+                      minWidth: '154px',
+                      minHeight: '116px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      boxSizing: 'border-box',
+                      boxShadow: '0 3px 10px rgba(20,70,100,0.08)',
+                      textAlign: 'center',
+                    }}>
+                      <span style={{
+                        display: 'block',
+                        fontSize: '9px',
+                        fontWeight: 800,
+                        color: '#087f9f',
+                        letterSpacing: '1px',
+                      }}>
+                        MESAS CERRADAS
+                      </span>
+                      <strong style={{
+                        display: 'block',
+                        fontSize: '32px',
+                        lineHeight: 1.2,
+                        color: '#087f9f',
+                      }}>
+                        {mesasDelColegio.length
+                          ? `${porcentajeMesasEscrutadasColegio.toFixed(1)}%`
+                          : '—'}
+                      </strong>
+                      <small style={{ color: '#526b7e', fontSize: '10px' }}>
+                        {numeroAR(mesasColegioConEscrutinio)} de {numeroAR(mesasDelColegio.length)} mesas
+                      </small>
+                    </div>
+                  </div>
+                </div>
+                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} colegioSeleccionado={colegioPublicoActivo?.identificador_kml || colegioPublicoActivo?.nombre_normalizado || colegioPublicoActivo?.nombre || colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
                 <div className="e27-map-foot">{colegiosKml?.features.length ?? '—'} polígonos de establecimientos · La capa de circuitos está excluida</div>
               </section>
-              <aside className="e27-panel e27-public-summary-panel">
+              <aside
+                className="e27-panel e27-public-summary-panel"
+                style={{
+                  height: '100%',
+                  minHeight: 0,
+                  maxHeight: 'none',
+                  overflowY: 'auto',
+                  alignSelf: 'stretch',
+                  boxSizing: 'border-box',
+                }}
+              >
                 <span className="e27-kicker">CONSULTA POR ESTABLECIMIENTO</span>
                 <h2>Participación y escrutinio</h2>
+                <div className="e27-school-search-block">
+                  <label className="e27-public-filter" htmlFor="e27-buscar-colegio">Buscar establecimiento
+                    <div className="e27-school-search-control">
+                      <input
+                        id="e27-buscar-colegio"
+                        type="search"
+                        value={busquedaColegio}
+                        onChange={(e) => {
+                          setBusquedaColegio(e.target.value);
+                          setMostrarResultadosBusquedaColegio(true);
+                        }}
+                        onFocus={() => setMostrarResultadosBusquedaColegio(true)}
+                        placeholder="Escribí el nombre del colegio…"
+                        autoComplete="off"
+                        aria-label="Buscar establecimiento por nombre o circuito"
+                      />
+                      {busquedaColegio && <button type="button" className="e27-school-search-clear" onClick={() => {
+                        setBusquedaColegio('');
+                        setMostrarResultadosBusquedaColegio(false);
+                      }}>Limpiar</button>}
+                    </div>
+                  </label>
+                  {mostrarResultadosBusquedaColegio && busquedaColegio.trim().length > 0 && (
+                    <div className="e27-school-search-results" role="listbox" aria-label="Resultados de búsqueda de colegios">
+                      {colegiosFiltradosPorBusqueda.length ? colegiosFiltradosPorBusqueda.map((colegio) => (
+                        <button
+                          type="button"
+                          role="option"
+                          aria-selected={colegio.id === colegioSeleccionadoPublico}
+                          className="e27-school-search-option"
+                          key={colegio.id}
+                          onClick={() => seleccionarColegioPublico(colegio)}
+                        >
+                          <span>{colegio.nombre}</span>
+                          <small>Circuito {colegio.circuito || '—'}</small>
+                        </button>
+                      )) : <div className="e27-school-search-empty">No encontramos establecimientos con esa búsqueda.</div>}
+                    </div>
+                  )}
+                </div>
                 <label className="e27-public-filter">Seleccionar colegio
                   <select value={colegioSeleccionadoPublico} onChange={(e) => {
-                    const id = e.target.value;
-                    setColegioSeleccionadoPublico(id);
-                    const colegio = colegiosPublicos.find((item) => item.id === id);
-                    setColegioPoligonoSeleccionado(colegio?.nombre || '');
+                    const colegio = colegiosPublicos.find((item) => item.id === e.target.value);
+                    if (colegio) seleccionarColegioPublico(colegio);
+                    else {
+                      setColegioSeleccionadoPublico('');
+                      setColegioPoligonoSeleccionado('');
+                      setBusquedaColegio('');
+                    }
                   }}>
                     <option value="">Seleccionar colegio</option>
                     {colegiosPublicos.map((colegio) => <option key={colegio.id} value={colegio.id}>{colegio.nombre} · Circuito {colegio.circuito || '—'}</option>)}
@@ -1125,31 +1668,194 @@ export default function Elecciones2027() {
                 </label>
                 {colegioPublicoActivo ? (
                   <>
-                    <div className="e27-selected-school"><strong>{colegioPublicoActivo.nombre}</strong><span>Circuito {colegioPublicoActivo.circuito || '—'}</span></div>
-                    <div className="e27-public-mini-stats">
-                      <article><small>MESAS DEL COLEGIO</small><strong>{mesasDelColegio.length}</strong></article>
-                      <article><small>MESAS CON PARTICIPACIÓN</small><strong>{mesasColegioConParticipacion} / {mesasDelColegio.length}</strong></article>
+                    {/* ENCABEZADO DEL ESTABLECIMIENTO */}
+                    <div className="e27-selected-school">
+                      <strong>{colegioPublicoActivo.nombre}</strong>
+                      <span>Circuito {colegioPublicoActivo.circuito || '—'}</span>
                     </div>
-                    <div className="e27-big-turnout e27-school-turnout"><strong>{habilitadosColegio ? `${Math.round(porcentajeColegio)}%` : '—'}</strong><span>participación del establecimiento</span></div>
-                    <div className="e27-progress-track"><span style={{ width: `${porcentajeColegio}%` }} /></div>
+
+                    {/* RESULTADOS PUBLICADOS: PARTIDOS, VOTOS EN BLANCO Y NULOS */}
+                    <section className="e27-all-circuit-parties e27-college-party-results">
+                      <div className="e27-party-results-heading">
+                        <div>
+                          <span className="e27-kicker">ESCRUTINIO PUBLICADO</span>
+                          <h3>Distribución de votos escrutados</h3>
+                        </div>
+                        <small>{numeroAR(totalVotosEscrutadosColegio)} votos escrutados</small>
+                      </div>
+
+                      {totalVotosEscrutadosColegio > 0 ? (
+                        <div className="e27-party-results-list">
+                          {partidosColegio.map((partido) => {
+                            const porcentaje = (partido.votos / totalVotosEscrutadosColegio) * 100;
+
+                            return (
+                              <article className="e27-party-result" key={partido.partido_id}>
+                                <div className="e27-party-result-line">
+                                  <span>
+                                    <i style={{ background: partido.color }} />
+                                    {partido.nombre}
+                                  </span>
+                                  <strong>{porcentaje.toFixed(1)}%</strong>
+                                </div>
+                                <div className="e27-party-result-track">
+                                  <span
+                                    style={{
+                                      width: `${Math.min(100, porcentaje)}%`,
+                                      background: partido.color,
+                                    }}
+                                  />
+                                </div>
+                                <small>{numeroAR(partido.votos)} votos</small>
+                              </article>
+                            );
+                          })}
+
+                          <article className="e27-party-result" key="votos-blancos-colegio">
+                            <div className="e27-party-result-line">
+                              <span>
+                                <i style={{ background: '#64748b' }} />
+                                Votos en blanco
+                              </span>
+                              <strong>
+                                {(votosBlancosColegio / totalVotosEscrutadosColegio * 100).toFixed(1)}%
+                              </strong>
+                            </div>
+                            <div className="e27-party-result-track">
+                              <span
+                                style={{
+                                  width: `${Math.min(100, votosBlancosColegio / totalVotosEscrutadosColegio * 100)}%`,
+                                  background: '#64748b',
+                                }}
+                              />
+                            </div>
+                            <small>{numeroAR(votosBlancosColegio)} votos</small>
+                          </article>
+
+                          <article className="e27-party-result" key="votos-nulos-colegio">
+                            <div className="e27-party-result-line">
+                              <span>
+                                <i style={{ background: '#8b5cf6' }} />
+                                Votos nulos
+                              </span>
+                              <strong>
+                                {(votosNulosColegio / totalVotosEscrutadosColegio * 100).toFixed(1)}%
+                              </strong>
+                            </div>
+                            <div className="e27-party-result-track">
+                              <span
+                                style={{
+                                  width: `${Math.min(100, votosNulosColegio / totalVotosEscrutadosColegio * 100)}%`,
+                                  background: '#8b5cf6',
+                                }}
+                              />
+                            </div>
+                            <small>{numeroAR(votosNulosColegio)} votos</small>
+                          </article>
+                        </div>
+                      ) : (
+                        <div className="e27-empty-state">
+                          <strong>No hay escrutinios publicados</strong>
+                          <span>
+                            Los resultados aparecerán cuando se aprueben los escrutinios de las mesas.
+                          </span>
+                        </div>
+                      )}
+                    </section>
+
+                    {/* ESTADÍSTICAS GENERALES DEL COLEGIO */}
+                    <div
+                      className="e27-public-mini-stats"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                        alignItems: 'stretch',
+                        gap: '10px',
+                      }}
+                    >
+                      <article style={{ minWidth: 0, minHeight: '76px', boxSizing: 'border-box' }}>
+                        <small>MESAS DEL COLEGIO</small>
+                        <strong>{numeroAR(mesasDelColegio.length)}</strong>
+                      </article>
+                      <article style={{ minWidth: 0, minHeight: '76px', boxSizing: 'border-box' }}>
+                        <small>MESAS CON PARTICIPACIÓN</small>
+                        <strong>
+                          {numeroAR(mesasColegioConParticipacion)} / {numeroAR(mesasDelColegio.length)}
+                        </strong>
+                      </article>
+                    </div>
+
+                    {/* PARTICIPACIÓN DEL ESTABLECIMIENTO */}
+                    <section className="e27-all-circuit-turnout">
+                      <span className="e27-kicker">PARTICIPACIÓN GENERAL</span>
+                      <div className="e27-big-turnout">
+                        <strong>{habilitadosColegio ? `${porcentajeColegio.toFixed(1)}%` : '—'}</strong>
+                        <span>del padrón habilitado votó</span>
+                      </div>
+                      <div className="e27-progress-track">
+                        <span style={{ width: `${porcentajeColegio}%` }} />
+                      </div>
+                      <div className="e27-all-circuit-turnout-caption">
+                        <b>{numeroAR(votantesColegio)} votantes registrados</b>
+                        <span>sobre {numeroAR(habilitadosColegio)} electores habilitados</span>
+                      </div>
+                    </section>
+
+                    {/* DETALLE INDIVIDUAL DE LAS MESAS */}
                     <div className="e27-mesa-public-list">
                       {mesasDelColegio.map((mesa) => {
                         const participacion = participacionPublicaPorMesa.get(mesa.id);
-                        const porcentaje = Number(mesa.electores_habilitados || 0) > 0 && participacion ? Math.min(100, participacion.votantes / Number(mesa.electores_habilitados) * 100) : 0;
+                        const porcentaje = Number(mesa.electores_habilitados || 0) > 0 && participacion
+                          ? Math.min(
+                              100,
+                              participacion.votantes / Number(mesa.electores_habilitados) * 100,
+                            )
+                          : 0;
                         const escrutinio = escrutinioPublicoPorMesa.get(mesa.id);
                         const ganadorMesa = escrutinio?.partidos[0];
+
                         return (
                           <article className="e27-mesa-public-card" key={mesa.id}>
-                            <div className="e27-mesa-public-top"><strong>Mesa {mesa.numero}</strong><span>{participacion ? `${Math.round(porcentaje)}% participación` : 'Sin participación publicada'}</span></div>
-                            <div className="e27-mesa-public-meta"><small>{numeroAR(participacion?.votantes || 0)} votantes · {numeroAR(Number(mesa.electores_habilitados || 0))} electores</small><small>{escrutinio ? `Escrutinio: ${ganadorMesa?.nombre || 'publicado'}` : 'Escrutinio pendiente'}</small></div>
-                            {escrutinio?.partidos?.length ? <div className="e27-mesa-party-line">{escrutinio.partidos.map((partido) => <span key={partido.partido_id}><i style={{ background: partido.color }} />{partido.nombre}: <b>{numeroAR(partido.votos)}</b></span>)}</div> : null}
+                            <div className="e27-mesa-public-top">
+                              <strong>Mesa {mesa.numero}</strong>
+                              <span>
+                                {participacion
+                                  ? `${Math.round(porcentaje)}% participación`
+                                  : 'Sin participación publicada'}
+                              </span>
+                            </div>
+                            <div className="e27-mesa-public-meta">
+                              <small>
+                                {numeroAR(participacion?.votantes || 0)} votantes ·{' '}
+                                {numeroAR(Number(mesa.electores_habilitados || 0))} electores
+                              </small>
+                              <small>
+                                {escrutinio
+                                  ? `Escrutinio: ${ganadorMesa?.nombre || 'publicado'}`
+                                  : 'Escrutinio pendiente'}
+                              </small>
+                            </div>
+                            {escrutinio?.partidos?.length ? (
+                              <div className="e27-mesa-party-line">
+                                {escrutinio.partidos.map((partido) => (
+                                  <span key={partido.partido_id}>
+                                    <i style={{ background: partido.color }} />
+                                    {partido.nombre}: <b>{numeroAR(partido.votos)}</b>
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
                           </article>
                         );
                       })}
-                      {!mesasDelColegio.length && <div className="e27-empty-state"><strong>Este colegio todavía no tiene mesas activas</strong><span>Las mesas aparecerán cuando estén registradas en el sistema.</span></div>}
+
+                      {!mesasDelColegio.length && (
+                        <div className="e27-empty-state">
+                          <strong>Este colegio todavía no tiene mesas activas</strong>
+                          <span>Las mesas aparecerán cuando estén registradas en el sistema.</span>
+                        </div>
+                      )}
                     </div>
-                    <div className="e27-party-results-heading"><div><span className="e27-kicker">RESULTADOS PUBLICADOS</span><h3>Totales por partido</h3></div><small>{numeroAR(totalVotosColegio)} votos</small></div>
-                    {partidosColegio.length ? <div className="e27-party-results-list">{partidosColegio.map((partido) => <article className="e27-party-result" key={partido.partido_id}><div className="e27-party-result-line"><span><i style={{ background: partido.color }} />{partido.nombre}</span><strong>{totalVotosColegio ? `${(partido.votos / totalVotosColegio * 100).toFixed(1)}%` : '0%'}</strong></div><div className="e27-party-result-track"><span style={{ width: `${totalVotosColegio ? partido.votos / totalVotosColegio * 100 : 0}%`, background: partido.color }} /></div><small>{numeroAR(partido.votos)} votos</small></article>)}</div> : <div className="e27-empty-state"><strong>Sin resultados publicados</strong><span>El escrutinio por partido se mostrará luego de la aprobación.</span></div>}
                   </>
                 ) : colegioPoligonoSeleccionado ? (
                   <div className="e27-empty-state e27-polygon-unlinked-state">
@@ -1163,23 +1869,23 @@ export default function Elecciones2027() {
           ) : vista === 'participacion' ? (
             <div className="e27-public-split e27-participation-layout">
               <section className="e27-panel e27-public-map-panel">
-                <div className="e27-panel-heading"><div><span className="e27-kicker">MAPA DE PARTICIPACIÓN · POR CIRCUITO</span><h2>Participación en La Matanza</h2><p>La intensidad del verde representa el porcentaje de votantes registrado y publicado.</p></div><span className="e27-map-label">VERDE = PARTICIPACIÓN</span></div>
-                <div className="e27-map-wrap e27-map-wrap-participation"><MapaCircuitos data={circuitosGeo} valores={participacionCircuitos} modo="participacion" /></div>
+                <div className="e27-panel-heading"><div><span className="e27-kicker">MAPA DE PARTICIPACIÓN · {circuitoSeleccionado ? `CIRCUITO ${circuitoSeleccionado}` : 'TOTAL MUNICIPAL'}</span><h2>{circuitoSeleccionado ? `Participación del circuito ${circuitoSeleccionado}` : 'Participación total en La Matanza'}</h2><p>La intensidad del verde representa el porcentaje de votantes registrado y publicado en cada circuito.</p></div><span className="e27-map-label">VERDE = PARTICIPACIÓN</span></div>
+                <div className="e27-map-wrap e27-map-wrap-participation"><MapaCircuitos data={circuitosGeo} valores={participacionCircuitos} modo="participacion" selectedCircuit={circuitoSeleccionado} /></div>
                 <div className="e27-legend"><span>0%</span><div className="e27-gradient green-gradient" /><span>100%</span></div>
               </section>
               <aside className="e27-panel e27-public-summary-panel">
                 <span className="e27-kicker">SEGUIMIENTO DE PARTICIPACIÓN</span>
-                <h2>Consultar por circuito</h2>
-                <label className="e27-public-filter">Circuito electoral
+                <h2>{circuitoSeleccionado ? 'Consultar por circuito' : 'Participación total'}</h2>
+                <label className="e27-public-filter">Ver participación
                   <select value={circuitoSeleccionado} onChange={(e) => setCircuitoSeleccionado(e.target.value)}>
-                    <option value="">Seleccionar circuito</option>
-                    {CIRCUITOS_ELECTORALES.map((codigo) => <option key={codigo} value={codigo}>{codigo}</option>)}
+                    <option value="">Participación total</option>
+                    {CIRCUITOS_ELECTORALES.map((codigo) => <option key={codigo} value={codigo}>Circuito {codigo}</option>)}
                   </select>
                 </label>
                 {circuitoSeleccionado ? (
                   <>
                     <div className="e27-selected-school"><strong>Circuito {circuitoSeleccionado}</strong><span>{colegiosDelCircuito.length} establecimientos activos</span></div>
-                    <div className="e27-big-turnout"><strong>{habilitadosCircuito ? `${Math.round(porcentajeCircuitoSeleccionado)}%` : '—'}</strong><span>de participación del circuito</span></div>
+                    <div className="e27-big-turnout"><strong>{habilitadosCircuito ? `${porcentajeCircuitoSeleccionado.toFixed(1)}%` : '—'}</strong><span>de participación del circuito</span></div>
                     <div className="e27-progress-track"><span style={{ width: `${porcentajeCircuitoSeleccionado}%` }} /></div>
                     <div className="e27-public-mini-stats">
                       <article><small>MESAS TOTALES</small><strong>{numeroAR(mesasDelCircuito.length)}</strong></article>
@@ -1197,7 +1903,20 @@ export default function Elecciones2027() {
                       {!colegiosDelCircuito.length && <div className="e27-empty-state"><strong>No hay establecimientos configurados para este circuito</strong><span>Se mostrarán aquí cuando existan colegios y mesas activos en Supabase.</span></div>}
                     </div>
                   </>
-                ) : <div className="e27-empty-state"><strong>Seleccioná un circuito electoral</strong><span>Vas a poder consultar cantidad de establecimientos y mesas, mesas con participación publicada y porcentaje de votantes sobre los electores habilitados.</span></div>}
+                ) : (
+                  <>
+                    <div className="e27-selected-school"><strong>La Matanza · Total municipal</strong><span>{numeroAR(circuitosActivosMunicipio)} circuitos con establecimientos activos</span></div>
+                    <div className="e27-big-turnout"><strong>{habilitadosMunicipio ? `${porcentajeMunicipio.toFixed(1)}%` : '—'}</strong><span>de participación sobre el padrón habilitado</span></div>
+                    <div className="e27-progress-track"><span style={{ width: `${porcentajeMunicipio}%` }} /></div>
+                    <div className="e27-public-mini-stats">
+                      <article><small>ESTABLECIMIENTOS ACTIVOS</small><strong>{numeroAR(colegiosPublicos.length)}</strong></article>
+                      <article><small>MESAS ACTIVAS</small><strong>{numeroAR(mesasActivasMunicipio.length)}</strong></article>
+                      <article><small>MESAS CON PARTICIPACIÓN</small><strong>{numeroAR(mesasMunicipioConParticipacion)}</strong></article>
+                      <article><small>ELECTORES HABILITADOS</small><strong>{numeroAR(habilitadosMunicipio)}</strong></article>
+                    </div>
+                    <div className="e27-map-caption">{numeroAR(votantesMunicipio)} votantes registrados en el total de mesas con participación publicada.</div>
+                  </>
+                )}
                 {errorDatosPublicos && <div className="e27-public-data-warning">{errorDatosPublicos}</div>}
                 {cargandoDatos && <div className="e27-map-caption">Actualizando datos publicados…</div>}
               </aside>
@@ -1205,14 +1924,63 @@ export default function Elecciones2027() {
           ) : (
             <div className="e27-public-split e27-circuit-results-layout">
               <section className="e27-panel e27-public-map-panel e27-circuit-results-map-panel">
-                <div className="e27-panel-heading">
-                  <div>
-                    <span className="e27-kicker">MAPA DE RESULTADOS · 25 CIRCUITOS</span>
-                    <h2>Resultados territoriales</h2>
-                    <p>Elegí un circuito en el panel derecho. El mapa lo va a resaltar y acercar automáticamente.</p>
-                  </div>
-                  <span className="e27-map-label">BORDE DORADO = SELECCIÓN</span>
-                </div>
+               
+<div className="e27-panel-heading e27-circuit-map-heading">
+  <div>
+    <span className="e27-kicker">MAPA DE RESULTADOS · 25 CIRCUITOS</span>
+    <h2>Resultados territoriales</h2>
+    <p>Vista general de todos los circuitos. Elegí uno para consultar su detalle y resaltar su ubicación en el mapa.</p>
+  </div>
+
+  <div style={{
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'flex-end',
+    gap: '8px',
+    flexShrink: 0
+  }}>
+    <span className="e27-map-label">
+      BORDE DORADO = SELECCIÓN
+    </span>
+
+    <div style={{
+      background: '#ffffff',
+      border: '1px solid #b8ddeb',
+      borderRadius: '14px',
+      padding: '12px 16px',
+      minWidth: '145px',
+      boxShadow: '0 3px 10px rgba(20,70,100,0.08)',
+      textAlign: 'center'
+    }}>
+      <span style={{
+        display: 'block',
+        fontSize: '10px',
+        fontWeight: 800,
+        color: '#087f9f',
+        letterSpacing: '1px'
+      }}>
+        MESAS CERRADAS
+      </span>
+
+      <strong style={{
+        display: 'block',
+        fontSize: '30px',
+        lineHeight: 1.2,
+        color: '#087f9f'
+      }}>
+        {porcentajeMesasCerradasMunicipio.toFixed(1)}%
+      </strong>
+
+      <small style={{
+        color: '#526b7e',
+        fontSize: '11px'
+      }}>
+        {numeroAR(mesasMunicipioConEscrutinio)} de {numeroAR(mesasActivasMunicipio.length)} mesas
+      </small>
+    </div>
+  </div>
+</div>
+
                 <div className="e27-map-wrap e27-map-wrap-circuit-results">
                   <MapaCircuitos
                     data={circuitosGeo}
@@ -1228,15 +1996,15 @@ export default function Elecciones2027() {
                 {errorDatosPublicos && <div className="e27-public-data-warning">{errorDatosPublicos}</div>}
               </section>
 
-              <aside className="e27-panel e27-public-summary-panel e27-circuit-results-summary">
+              <aside className={`e27-panel e27-public-summary-panel e27-circuit-results-summary ${circuitoResultadoSeleccionado ? 'has-selected-circuit' : 'has-all-circuits'}`}>
                 <span className="e27-kicker">CONSULTA DE RESULTADOS TERRITORIALES</span>
-                <h2>Información por circuito</h2>
+                <h2>{circuitoResultadoSeleccionado ? `Información del circuito ${circuitoResultadoSeleccionado}` : 'Resumen municipal · Todos los circuitos'}</h2>
                 <label className="e27-public-filter">Seleccionar circuito electoral
                   <select
                     value={circuitoResultadoSeleccionado}
                     onChange={(e) => setCircuitoResultadoSeleccionado(e.target.value)}
                   >
-                    <option value="">Seleccionar circuito</option>
+                    <option value="">Todos los circuitos · Total municipal</option>
                     {CIRCUITOS_ELECTORALES.map((codigo) => <option key={codigo} value={codigo}>Circuito {codigo}</option>)}
                   </select>
                 </label>
@@ -1247,6 +2015,41 @@ export default function Elecciones2027() {
                       <strong>Circuito {circuitoResultadoSeleccionado}</strong>
                       <span>{numeroAR(colegiosCircuitoResultados.length)} establecimientos activos</span>
                     </div>
+
+                    <div className="e27-circuit-vote-total">
+                      <span>SUMA TOTAL DE VOTOS ESCRUTADOS</span>
+                      <strong>{numeroAR(totalVotosEscrutadosCircuito)}</strong>
+                      <small>Partidos + votos en blanco + votos nulos</small>
+                    </div>
+
+                    <div className="e27-party-results-heading e27-circuit-party-heading">
+                      <div><span className="e27-kicker">ESCRUTINIO PUBLICADO</span><h3>Distribución de votos escrutados</h3></div>
+                      <small>{numeroAR(totalVotosEscrutadosCircuito)} votos escrutados</small>
+                    </div>
+                    {resultadosVotosCircuito.length ? (
+                      <div className="e27-party-results-list">
+                        {resultadosVotosCircuito.map((item) => {
+                          const porcentaje = totalVotosEscrutadosCircuito > 0
+                            ? item.votos / totalVotosEscrutadosCircuito * 100
+                            : 0;
+                          return (
+                            <article className="e27-party-result" key={item.key}>
+                              <div className="e27-party-result-line">
+                                <span><i style={{ background: item.color }} />{item.nombre}</span>
+                                <strong>{porcentaje.toFixed(1)}%</strong>
+                              </div>
+                              <div className="e27-party-result-track"><span style={{ width: `${Math.min(100, porcentaje)}%`, background: item.color }} /></div>
+                              <small>{numeroAR(item.votos)} votos</small>
+                            </article>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="e27-empty-state e27-circuit-empty-results">
+                        <strong>No hay escrutinios publicados en este circuito</strong>
+                        <span>Los resultados aparecerán cuando se aprueben los escrutinios de sus mesas.</span>
+                      </div>
+                    )}
 
                     <div className="e27-circuit-turnout-block">
                       <div className="e27-circuit-turnout-number">
@@ -1267,49 +2070,118 @@ export default function Elecciones2027() {
                       <article><small>ESTABLECIMIENTOS</small><strong>{numeroAR(colegiosCircuitoResultados.length)}</strong></article>
                     </div>
 
-                    <div className="e27-circuit-vote-total">
-                      <span>SUMA TOTAL DE VOTOS ESCRUTADOS</span>
-                      <strong>{numeroAR(totalVotosEscrutadosCircuito)}</strong>
-                      <small>Partidos + votos en blanco + votos nulos</small>
+                    <div className="e27-selected-circuit-closure">
+                      <div className="e27-closure-heading">
+                        <div><span className="e27-kicker">CIERRE DE MESAS</span><h3>Avance del escrutinio</h3></div>
+                        <strong>{mesasCircuitoResultados.length ? `${(mesasCircuitoConEscrutinio / mesasCircuitoResultados.length * 100).toFixed(1)}%` : '—'}</strong>
+                      </div>
+                      <div className="e27-progress-track e27-closure-total-track">
+                        <span style={{ width: `${mesasCircuitoResultados.length ? (mesasCircuitoConEscrutinio / mesasCircuitoResultados.length * 100) : 0}%` }} />
+                      </div>
+                      <p>{numeroAR(mesasCircuitoConEscrutinio)} de {numeroAR(mesasCircuitoResultados.length)} mesas con escrutinio publicado.</p>
                     </div>
 
-                    <div className="e27-party-results-heading e27-circuit-party-heading">
-                      <div><span className="e27-kicker">ESCRUTINIO PUBLICADO</span><h3>Votos por partido político</h3></div>
-                      <small>{numeroAR(totalVotosPartidosCircuito)} votos partidarios</small>
-                    </div>
-                    {partidosCircuitoResultados.length ? (
-                      <div className="e27-party-results-list">
-                        {partidosCircuitoResultados.map((partido) => {
-                          const porcentaje = totalVotosEscrutadosCircuito > 0
-                            ? partido.votos / totalVotosEscrutadosCircuito * 100
-                            : 0;
-                          return (
-                            <article className="e27-party-result" key={partido.partido_id}>
-                              <div className="e27-party-result-line">
-                                <span><i style={{ background: partido.color }} />{partido.nombre}</span>
-                                <strong>{porcentaje.toFixed(1)}%</strong>
-                              </div>
-                              <div className="e27-party-result-track"><span style={{ width: `${Math.min(100, porcentaje)}%`, background: partido.color }} /></div>
-                              <small>{numeroAR(partido.votos)} votos</small>
-                            </article>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="e27-empty-state e27-circuit-empty-results">
-                        <strong>No hay escrutinios publicados en este circuito</strong>
-                        <span>Los votos por partido aparecerán cuando se aprueben los resultados de sus mesas.</span>
-                      </div>
-                    )}
-                    <div className="e27-circuit-special-votes">
-                      <article><span>Votos en blanco</span><strong>{numeroAR(votosBlancosCircuito)}</strong></article>
-                      <article><span>Votos nulos</span><strong>{numeroAR(votosNulosCircuito)}</strong></article>
-                    </div>
+
                   </>
                 ) : (
-                  <div className="e27-empty-state e27-circuit-empty-results">
-                    <strong>Seleccioná un circuito electoral</strong>
-                    <span>El mapa va a destacar el circuito elegido y acá vas a ver la cantidad de mesas, participación y suma de votos por partido de todas sus mesas.</span>
+                  <div className="e27-all-circuits-dashboard">
+                    <div className="e27-selected-school">
+                      <strong>La Matanza · Total municipal</strong>
+                      <span>{numeroAR(circuitosActivosMunicipio)} circuitos con establecimientos activos · Vista consolidada</span>
+                    </div>
+
+                    <section className="e27-all-circuit-parties">
+                      <div className="e27-party-results-heading e27-circuit-party-heading">
+                        <div>
+                          <span className="e27-kicker">ESCRUTINIO PUBLICADO</span>
+                          <h3>Distribución de votos escrutados</h3>
+                        </div>
+                        <small>{numeroAR(totalVotosEscrutadosMunicipio)} votos escrutados</small>
+                      </div>
+                      {resultadosVotosMunicipio.length ? (
+                        <div className="e27-party-results-list">
+                          {resultadosVotosMunicipio.map((item) => {
+                            const porcentaje = totalVotosEscrutadosMunicipio > 0
+                              ? (item.votos / totalVotosEscrutadosMunicipio) * 100
+                              : 0;
+                            return (
+                              <article className="e27-party-result" key={item.key}>
+                                <div className="e27-party-result-line">
+                                  <span><i style={{ background: item.color }} />{item.nombre}</span>
+                                  <strong>{porcentaje.toFixed(1)}%</strong>
+                                </div>
+                                <div className="e27-party-result-track">
+                                  <span style={{ width: `${Math.min(100, porcentaje)}%`, background: item.color }} />
+                                </div>
+                                <small>{numeroAR(item.votos)} votos</small>
+                              </article>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="e27-empty-state e27-circuit-empty-results">
+                          <strong>No hay escrutinios publicados en el municipio</strong>
+                          <span>Los resultados aparecerán cuando se aprueben los escrutinios de las mesas.</span>
+                        </div>
+                      )}
+                    </section>
+
+                    <section className="e27-all-circuit-turnout">
+                      <span className="e27-kicker">PARTICIPACIÓN GENERAL</span>
+                      <div className="e27-big-turnout">
+                        <strong>{habilitadosMunicipio > 0 ? `${porcentajeMunicipio.toFixed(1)}%` : '—'}</strong>
+                        <span>del padrón habilitado votó</span>
+                      </div>
+                      <div className="e27-progress-track">
+                        <span style={{ width: `${porcentajeMunicipio}%` }} />
+                      </div>
+                      <div className="e27-all-circuit-turnout-caption">
+                        <b>{numeroAR(votantesMunicipio)} votantes registrados</b>
+                        <span>sobre {numeroAR(habilitadosMunicipio)} electores habilitados</span>
+                      </div>
+                    </section>
+
+                    <div className="e27-public-mini-stats e27-all-circuit-stats">
+                      <article><small>MESAS ACTIVAS</small><strong>{numeroAR(mesasActivasMunicipio.length)}</strong></article>
+                      <article><small>MESAS CON PARTICIPACIÓN</small><strong>{numeroAR(mesasMunicipioConParticipacion)} / {numeroAR(mesasActivasMunicipio.length)}</strong></article>
+                      <article><small>MESAS CERRADAS</small><strong>{numeroAR(mesasMunicipioConEscrutinio)} / {numeroAR(mesasActivasMunicipio.length)}</strong></article>
+                      <article><small>ESTABLECIMIENTOS</small><strong>{numeroAR(colegiosPublicos.length)}</strong></article>
+                    </div>
+
+                    <section className="e27-closure-section">
+                      <div className="e27-closure-heading">
+                        <div>
+                          <span className="e27-kicker">AVANCE DEL ESCRUTINIO</span>
+                          <h3>Porcentaje de mesas cerradas</h3>
+                        </div>
+                        <strong>{porcentajeMesasCerradasMunicipio.toFixed(1)}%</strong>
+                      </div>
+                      <div className="e27-progress-track e27-closure-total-track">
+                        <span style={{ width: `${porcentajeMesasCerradasMunicipio}%` }} />
+                      </div>
+                      <p>{numeroAR(mesasMunicipioConEscrutinio)} de {numeroAR(mesasActivasMunicipio.length)} mesas tienen escrutinio publicado y aprobado.</p>
+
+                      <div className="e27-circuit-closure-grid">
+                        {avanceCierrePorCircuito.map((item) => (
+                          <article className="e27-circuit-closure-card" key={item.codigo}>
+                            <div className="e27-circuit-closure-top">
+                              <strong>{item.codigo}</strong>
+                              <b>{item.total ? `${item.porcentaje.toFixed(0)}%` : '—'}</b>
+                            </div>
+                            <div className="e27-circuit-closure-track">
+                              <span style={{ width: `${item.porcentaje}%` }} />
+                            </div>
+                            <small>
+                              {item.total
+                                ? `${item.cerradas} / ${item.total} mesas cerradas`
+                                : 'Sin mesas configuradas'}
+                            </small>
+                          </article>
+                        ))}
+                      </div>
+                    </section>
+
+
                   </div>
                 )}
                 {errorDatosPublicos && <div className="e27-public-data-warning">{errorDatosPublicos}</div>}
@@ -1330,25 +2202,87 @@ export default function Elecciones2027() {
               {seccionAdmin === 'inicio' ? (
                 <>
                   <div className="e27-panel-heading"><div><span className="e27-kicker">ADMINISTRACIÓN CENTRAL</span><h2>Panel de gestión</h2><p>Elegí qué tarea querés realizar.</p></div></div>
+                  <div className="e27-database-metrics" aria-label="Resumen de datos guardados en Supabase">
+                    <article><small>COLEGIOS ACTIVOS</small><strong>{numeroAR(cantidadColegiosActivos)}</strong></article>
+                    <article><small>COLEGIOS CON POLÍGONO KML</small><strong>{numeroAR(cantidadColegiosCartografiados)}</strong></article>
+                    <article><small>MESAS ACTIVAS</small><strong>{numeroAR(cantidadMesasActivas)}</strong></article>
+                  </div>
                   <nav className="e27-tabs e27-admin-nav" aria-label="Opciones de administración">
                     <button className="e27-tab" onClick={() => setSeccionAdmin('responsables')}><span>♙</span><div><strong>Alta de responsables de escuela</strong><small>Registrar responsables y asignar establecimientos</small></div></button>
+                    <button className="e27-tab" onClick={() => setSeccionAdmin('usuarios')}><span>♧</span><div><strong>Administrar usuarios</strong><small>Consultar cuentas, cambiar contraseñas y ajustar mesas</small></div></button>
+                    <button className="e27-tab" onClick={() => setSeccionAdmin('colegios')}><span>⌂</span><div><strong>Administrar colegios</strong><small>{numeroAR(cantidadColegiosActivos)} establecimientos activos · editar nombres</small></div></button>
                     <button className="e27-tab" onClick={() => setSeccionAdmin('partidos')}><span>◈</span><div><strong>Alta de partidos políticos</strong><small>Configurar nombre, sigla y color identificatorio</small></div></button>
                     <button className="e27-tab" onClick={() => { setSeccionAdmin('escrutinio'); setPestanaEscrutinio('carga'); }}><span>▤</span><div><strong>Registro de escrutinio</strong><small>Cargar, revisar, aprobar y consultar el avance</small></div></button>
                   </nav>
                 </>
               ) : (
                 <>
-                  <div className="e27-panel-heading"><div><span className="e27-kicker">ADMINISTRACIÓN CENTRAL</span><h2>{seccionAdmin === 'responsables' ? 'Alta de responsables de escuela' : seccionAdmin === 'partidos' ? 'Alta de partidos políticos' : 'Registro de escrutinio'}</h2><p>{seccionAdmin === 'responsables' ? 'Interfaz de carga de responsables y asignación de establecimientos.' : seccionAdmin === 'partidos' ? 'Configuración de los partidos que participarán en el escrutinio.' : 'Gestión de la carga, revisión y publicación de resultados.'}</p></div><button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setSeccionAdmin('inicio')}>← Volver al menú</button></div>
+                  <div className="e27-panel-heading"><div><span className="e27-kicker">ADMINISTRACIÓN CENTRAL</span><h2>{seccionAdmin === 'responsables' ? 'Alta de responsables de escuela' : seccionAdmin === 'usuarios' ? 'Administrar usuarios' : seccionAdmin === 'colegios' ? 'Administrar colegios' : seccionAdmin === 'partidos' ? 'Alta de partidos políticos' : 'Registro de escrutinio'}</h2><p>{seccionAdmin === 'responsables' ? 'Creá cuentas, definí una contraseña inicial y asigná establecimientos.' : seccionAdmin === 'usuarios' ? 'Consultá las cuentas creadas, modificá sus contraseñas y ajustá las mesas de cada establecimiento asignado.' : seccionAdmin === 'colegios' ? 'Revisá los establecimientos registrados y corregí su nombre visible sin alterar su circuito ni sus mesas.' : seccionAdmin === 'partidos' ? 'Configuración de los partidos que participarán en el escrutinio.' : 'Gestión de la carga, revisión y publicación de resultados.'}</p></div><button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setSeccionAdmin('inicio')}>← Volver al menú</button></div>
                   {mensaje && <div className="e27-feedback">{mensaje}</div>}
+                  {seccionAdmin === 'colegios' && (
+                    <section className="e27-panel e27-college-admin-panel">
+                      <div className="e27-college-admin-intro">
+                        <div>
+                          <span className="e27-kicker">DIRECTORIO DE ESTABLECIMIENTOS</span>
+                          <h3>Colegios registrados</h3>
+                          <p>Podés corregir el nombre visible de cada colegio. El circuito, el identificador y las mesas asociadas se mantienen sin cambios.</p>
+                        </div>
+                        <div className="e27-college-admin-count"><strong>{cantidadColegiosActivos || colegios.length}</strong><span>establecimientos activos en Supabase</span></div>
+                      </div>
+                      {colegios.length === 0 ? (
+                        <div className="e27-empty-state"><strong>No hay colegios activos para administrar</strong><span>Revisá que los establecimientos estén cargados y activos en Supabase.</span></div>
+                      ) : (
+                        <div className="e27-college-admin-list">
+                          {colegios.map((colegio) => (
+                            <article className="e27-college-admin-row" key={colegio.id}>
+                              <div className="e27-college-admin-meta">
+                                <span className="e27-college-admin-icon">⌂</span>
+                                <div>
+                                  <small>ESTABLECIMIENTO</small>
+                                  <strong>{colegio.nombre}</strong>
+                                  <span>Circuito {colegio.circuito || '—'}</span>
+                                </div>
+                              </div>
+                              {colegioEditandoId === colegio.id ? (
+                                <form className="e27-college-edit-form" onSubmit={guardarNombreColegio}>
+                                  <label>Nuevo nombre del colegio
+                                    <input
+                                      autoFocus
+                                      value={colegioNombreEditado}
+                                      onChange={(e) => setColegioNombreEditado(e.target.value)}
+                                      maxLength={180}
+                                      placeholder="Ingresá el nombre correcto"
+                                      required
+                                    />
+                                  </label>
+                                  <div className="e27-college-edit-actions">
+                                    <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setColegioEditandoId(null); setColegioNombreEditado(''); setMensaje(''); }} disabled={guardandoColegio === colegio.id}>Cancelar</button>
+                                    <button type="submit" className="e27-white-button" disabled={guardandoColegio === colegio.id || !colegioNombreEditado.trim()}>{guardandoColegio === colegio.id ? 'Guardando…' : 'Guardar nombre'}</button>
+                                  </div>
+                                </form>
+                              ) : (
+                                <button type="button" className="e27-white-button e27-college-edit-button" onClick={() => { setColegioEditandoId(colegio.id); setColegioNombreEditado(colegio.nombre); setMensaje(''); }}>
+                                  ✎ Editar nombre
+                                </button>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                      <p className="e27-college-admin-note">El identificador_kml que vincula el establecimiento con su polígono cartográfico se conserva aunque cambies el nombre visible. Cambiar el nombre visible no modifica responsables, circuito, mesas, electores ni reportes.</p>
+                    </section>
+                  )}
                   {seccionAdmin === 'responsables' && (
                     <section className="e27-panel e27-responsable-admin-panel">
                       <span className="e27-kicker">NUEVO RESPONSABLE</span>
-                      <form className="e27-capture-form e27-responsable-admin-form" onSubmit={previsualizarAltaResponsable}>
+                      <form className="e27-capture-form e27-responsable-admin-form" onSubmit={crearResponsableEnSupabase}>
                         <div className="e27-responsable-admin-fields">
-                          <label>Nombre y apellido<input value={responsableNombre} onChange={(e) => { setResponsableNombre(e.target.value); setResponsableVistaPrevia(false); }} placeholder="Nombre completo" autoComplete="name" required /></label>
-                          <label>Correo electrónico<input type="email" value={responsableEmail} onChange={(e) => { setResponsableEmail(e.target.value); setResponsableVistaPrevia(false); }} placeholder="responsable@correo.com" autoComplete="email" required /></label>
+                          <label>Nombre y apellido<input value={responsableNombre} onChange={(e) => { setResponsableNombre(e.target.value); }} placeholder="Nombre completo" autoComplete="name" required /></label>
+                          <label>Correo electrónico<input type="email" value={responsableEmail} onChange={(e) => { setResponsableEmail(e.target.value); }} placeholder="responsable@correo.com" autoComplete="email" required /></label>
+                          <label>Contraseña inicial<input type="password" value={responsablePassword} onChange={(e) => setResponsablePassword(e.target.value)} placeholder="Mínimo 12 caracteres" autoComplete="new-password" minLength={12} required /><small className="e27-admin-field-help">La definís vos y se entrega al responsable por un canal privado.</small></label>
+                          <label>Confirmar contraseña<input type="password" value={confirmarResponsablePassword} onChange={(e) => setConfirmarResponsablePassword(e.target.value)} placeholder="Repetir contraseña" autoComplete="new-password" minLength={12} required /></label>
                           <label className="e27-responsable-admin-school">Establecimiento
-                            <select value={responsableColegio} onChange={(e) => { setResponsableColegio(e.target.value); setResponsableVistaPrevia(false); }} required>
+                            <select value={responsableColegio} onChange={(e) => { setResponsableColegio(e.target.value); }} required>
                               <option value="">Seleccionar colegio</option>
                               {colegios.map((c) => <option key={c.id} value={c.id}>{c.nombre} · Circuito {c.circuito || '—'}</option>)}
                             </select>
@@ -1383,33 +2317,87 @@ export default function Elecciones2027() {
                           )}
                         </section>
 
-                        <p className="e27-responsable-admin-note">El responsable verá solamente las mesas de este establecimiento. Desde su cuenta podrá informar y guardar los electores habilitados reales de cada mesa; esa cantidad puede variar entre mesas. La creación de la cuenta y el alta inicial requieren una función segura del servidor.</p>
-                        <button className="e27-white-button e27-responsable-preview-button" type="submit">Generar vista previa de la asignación</button>
+                        <p className="e27-responsable-admin-note">El responsable verá solamente las mesas de este establecimiento. Desde su cuenta podrá informar y guardar los electores habilitados reales de cada mesa; esa cantidad puede variar entre mesas. La cuenta, el perfil, la asignación y las mesas se guardarán desde una función segura de Supabase.</p>
+                        <button className="e27-white-button e27-responsable-preview-button" type="submit" disabled={guardandoAltaResponsable}>{guardandoAltaResponsable ? 'Creando cuenta y mesas…' : 'Crear cuenta y guardar asignación'}</button>
                       </form>
 
-                      {responsableVistaPrevia && (
-                        <div className="e27-responsable-preview">
-                          <div><strong>Vista previa de la asignación</strong><span>{colegios.find((c) => c.id === responsableColegio)?.nombre || 'Establecimiento seleccionado'} · {responsableMesasConfig.length} mesas</span></div>
-                          <div className="e27-responsable-preview-list">
-                            {responsableMesasConfig.map((mesa, indice) => (
-                              <span key={`${mesa.numero}-${indice}`}>Mesa {mesa.numero}</span>
-                            ))}
-                          </div>
+                      {cuentaCreadaEmail && (
+                        <div className="e27-user-success" role="status">
+                          <strong>Cuenta creada correctamente</strong>
+                          <span>{cuentaCreadaEmail}</span>
+                          <small>La contraseña inicial quedó configurada. Por seguridad, no se vuelve a mostrar en pantalla.</small>
                         </div>
                       )}
-                      <div className="e27-empty-state"><strong>Responsables registrados</strong><span>La lista y las asignaciones guardadas se mostrarán aquí cuando conectemos esta sección con el alta segura de usuarios y mesas en Supabase.</span></div>
+                      <div className="e27-empty-state"><strong>Alta conectada con Supabase</strong><span>Al crear cada responsable se registra su cuenta, perfil, establecimiento y números de mesa. Los electores habilitados los completa el responsable desde su acceso.</span></div>
                     </section>
                   )}
+                  {seccionAdmin === 'usuarios' && (
+                    <section className="e27-panel e27-users-admin-panel">
+                      <div className="e27-users-panel-heading">
+                        <div><span className="e27-kicker">CUENTAS REGISTRADAS</span><h3>Responsables de escuela</h3><p>Desde acá podés restablecer contraseñas y modificar la cantidad de mesas activas del colegio asignado. Los cambios de mesas afectan a todos los responsables vinculados a ese establecimiento.</p></div>
+                        <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => void cargarUsuariosAdmin()} disabled={cargandoUsuariosAdmin}>{cargandoUsuariosAdmin ? 'Actualizando…' : '↻ Actualizar listado'}</button>
+                      </div>
+                      {cargandoUsuariosAdmin ? (
+                        <div className="e27-empty-state"><strong>Cargando usuarios…</strong><span>Consultando las cuentas y asignaciones registradas en Supabase.</span></div>
+                      ) : usuariosAdmin.length === 0 ? (
+                        <div className="e27-empty-state"><strong>No hay responsables registrados</strong><span>Cuando crees una cuenta desde “Alta de responsables de escuela”, aparecerá en este listado.</span></div>
+                      ) : (
+                        <div className="e27-users-list">
+                          {usuariosAdmin.map((usuario) => (
+                            <article className="e27-user-card" key={usuario.user_id}>
+                              <div className="e27-user-card-top">
+                                <div className="e27-user-avatar">{(usuario.nombre || usuario.email || 'U').trim().slice(0, 1).toUpperCase()}</div>
+                                <div className="e27-user-identity"><strong>{usuario.nombre || 'Sin nombre'}</strong><span>{usuario.email}</span><small>{usuario.activo ? 'Cuenta activa' : 'Cuenta inactiva'}{usuario.creado_en ? ` · Alta ${new Date(usuario.creado_en).toLocaleDateString('es-AR')}` : ''}</small></div>
+                                <span className={`e27-user-status ${usuario.activo ? 'is-active' : 'is-inactive'}`}>{usuario.activo ? 'ACTIVO' : 'INACTIVO'}</span>
+                              </div>
+                              <div className="e27-user-actions-row">
+                                <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioPasswordEditando(usuarioPasswordEditando === usuario.user_id ? null : usuario.user_id); setNuevaPasswordUsuario(''); setConfirmarNuevaPasswordUsuario(''); setMensaje(''); }}>♧ Cambiar contraseña</button>
+                              </div>
+                              {usuarioPasswordEditando === usuario.user_id && (
+                                <form className="e27-user-edit-form" onSubmit={(e) => { e.preventDefault(); void guardarPasswordUsuario(usuario.user_id); }}>
+                                  <div className="e27-user-edit-grid">
+                                    <label>Nueva contraseña<input type="password" value={nuevaPasswordUsuario} onChange={(e) => setNuevaPasswordUsuario(e.target.value)} minLength={12} autoComplete="new-password" placeholder="Mínimo 12 caracteres" required /></label>
+                                    <label>Confirmar contraseña<input type="password" value={confirmarNuevaPasswordUsuario} onChange={(e) => setConfirmarNuevaPasswordUsuario(e.target.value)} minLength={12} autoComplete="new-password" placeholder="Repetir contraseña" required /></label>
+                                  </div>
+                                  <div className="e27-user-edit-buttons"><button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioPasswordEditando(null); setNuevaPasswordUsuario(''); setConfirmarNuevaPasswordUsuario(''); }}>Cancelar</button><button type="submit" className="e27-white-button" disabled={guardandoPasswordUsuario === usuario.user_id}>{guardandoPasswordUsuario === usuario.user_id ? 'Actualizando…' : 'Guardar nueva contraseña'}</button></div>
+                                </form>
+                              )}
+                              <div className="e27-user-schools">
+                                {usuario.colegios.map((colegio) => {
+                                  const key = `${usuario.user_id}:${colegio.colegio_id}`;
+                                  return (
+                                    <div className="e27-user-school-row" key={colegio.colegio_id}>
+                                      <div className="e27-user-school-copy"><small>ESTABLECIMIENTO ASIGNADO · CIRCUITO {colegio.circuito || '—'}</small><strong>{colegio.nombre}</strong><span>{colegio.cantidad_mesas} {colegio.cantidad_mesas === 1 ? 'mesa activa' : 'mesas activas'}{colegio.numeros_mesas.length ? ` · N.º ${colegio.numeros_mesas.join(', ')}` : ''}</span></div>
+                                      {usuarioMesasEditando === key ? (
+                                        <form className="e27-user-mesas-form" onSubmit={(e) => { e.preventDefault(); void guardarCantidadMesasDeUsuario(usuario.user_id, colegio.colegio_id); }}>
+                                          <label>Cantidad de mesas<input type="number" min="1" max="100" step="1" value={cantidadMesasUsuario[key] ?? String(colegio.cantidad_mesas || 1)} onChange={(e) => setCantidadMesasUsuario((old) => ({ ...old, [key]: e.target.value }))} required /></label>
+                                          <div><button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setUsuarioMesasEditando(null)}>Cancelar</button><button type="submit" className="e27-white-button" disabled={guardandoMesasUsuario === key}>{guardandoMesasUsuario === key ? 'Guardando…' : 'Guardar mesas'}</button></div>
+                                        </form>
+                                      ) : (
+                                        <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioMesasEditando(key); setCantidadMesasUsuario((old) => ({ ...old, [key]: String(colegio.cantidad_mesas || 1) })); }}>✎ Editar cantidad</button>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                {!usuario.colegios.length && <div className="e27-empty-state"><strong>Sin colegio asignado</strong><span>Revisá la asignación de este usuario antes de habilitar su carga.</span></div>}
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      )}
+                    </section>
+                  )}
+
                   {seccionAdmin === 'partidos' && (
                     <section className="e27-panel"><span className="e27-kicker">NUEVO PARTIDO POLÍTICO</span>
-                      <form className="e27-capture-form" onSubmit={(e) => { e.preventDefault(); setMensaje('Vista de demostración: el partido no se guardó. La conexión con Supabase se realizará después de revisar la interfaz.'); }}>
+                      <form className="e27-capture-form" onSubmit={guardarPartidoEnSupabase}>
                         <label>Nombre del partido<input value={partidoNombre} onChange={(e) => setPartidoNombre(e.target.value)} placeholder="Nombre completo" required /></label>
                         <label>Sigla<input value={partidoSigla} onChange={(e) => setPartidoSigla(e.target.value.toUpperCase())} placeholder="SIGLA" maxLength={12} required /></label>
                         <label>Color identificatorio<input type="color" value={partidoColor} onChange={(e) => setPartidoColor(e.target.value)} /></label>
                         <div className="e27-winner-line"><i style={{ background: partidoColor }} /><strong>{partidoNombre || 'Vista previa del partido'} {partidoSigla ? `· ${partidoSigla}` : ''}</strong></div>
-                        <button className="e27-white-button" type="submit">Vista previa del partido</button>
+                        <button className="e27-white-button" type="submit" disabled={guardandoPartido}>{guardandoPartido ? 'Guardando…' : 'Guardar partido en Supabase'}</button>
                       </form>
-                      <div className="e27-empty-state"><strong>Partidos configurados</strong><span>La lista de partidos activos se mostrará aquí y se utilizará en la carga de votos.</span></div>
+                      <div className="e27-party-list admin-party-list">{partidos.map((partido) => <div className="e27-party-row" key={partido.id}><i style={{ background: partido.color }} /><span>{partido.nombre}</span><small>{partido.sigla}</small></div>)}{!partidos.length && <div className="e27-empty-state"><strong>No hay partidos registrados</strong><span>Cuando agregues un partido, quedará guardado en Supabase y aparecerá en la carga de escrutinio.</span></div>}</div>
                     </section>
                   )}
                   {seccionAdmin === 'escrutinio' && (
@@ -1571,7 +2559,11 @@ export default function Elecciones2027() {
                       </label>
 
                       <button className="e27-save-participation" type="submit" disabled={cargando || cargandoFranjas || !votantes.trim()}>
-                        {cargando ? 'Guardando registro…' : 'Guardar participación de esta hora'}
+                        {cargando
+                          ? 'Guardando registro…'
+                          : franjasGuardadas[franjaHora] !== undefined
+                            ? 'Actualizar participación de esta hora'
+                            : 'Guardar participación de esta hora'}
                       </button>
                     </div>
 
@@ -1657,7 +2649,7 @@ export default function Elecciones2027() {
             <button className="e27-white-button" type="submit" disabled={cargando}>{cargando ? 'Ingresando…' : 'Ingresar'}</button>
             <button type="button" className="e27-forgot" onClick={async () => {
               if (!email.trim()) { setError('Ingresá tu correo para recibir el enlace de recuperación.'); return; }
-              const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+              const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: new URL(import.meta.env.BASE_URL, window.location.origin).toString() });
               setError(resetError ? resetError.message : 'Si el correo está registrado, recibirás un enlace para recuperar la contraseña.');
             }}>Olvidé mi contraseña</button>
           </form>
