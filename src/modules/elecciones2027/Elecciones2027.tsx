@@ -96,6 +96,7 @@ type Asignacion = {
 };
 
 type Partido = { id: string; nombre: string; sigla: string; color: string };
+type ListaElectoral = { id: string; partido_id: string; nombre: string; sigla: string; candidato_principal: string; color: string; activo: boolean; orden: number };
 
 type ReportePendiente = {
   id: string;
@@ -572,6 +573,15 @@ export default function Elecciones2027() {
   const [partidoSigla, setPartidoSigla] = useState('');
   const [partidoColor, setPartidoColor] = useState('#2563eb');
   const [guardandoPartido, setGuardandoPartido] = useState(false);
+  const [modalidadElectoral, setModalidadElectoral] = useState<'general' | 'paso'>('general');
+  const [listasElectorales, setListasElectorales] = useState<ListaElectoral[]>([]);
+  const [listaPartidoId, setListaPartidoId] = useState('');
+  const [listaNombre, setListaNombre] = useState('');
+  const [listaSigla, setListaSigla] = useState('');
+  const [listaCandidato, setListaCandidato] = useState('');
+  const [listaColor, setListaColor] = useState('#7c3aed');
+  const [guardandoLista, setGuardandoLista] = useState(false);
+  const [listaEditandoId, setListaEditandoId] = useState<string | null>(null);
 
   const cambiarCantidadMesasResponsable = (valor: string) => {
     setResponsableCantidadMesas(valor);
@@ -836,7 +846,7 @@ export default function Elecciones2027() {
   const cargarPublico = useCallback(async (silencioso = false) => {
     if (!silencioso) setCargandoDatos(true);
     setErrorDatosPublicos('');
-    const [mapaResponse, circuitosResponse, partidosResponse, colegiosPublicosResponse, mesasPublicasResponse, reportesResponse, participacionResponse] = await Promise.all([
+    const [mapaResponse, circuitosResponse, partidosResponse, listasResponse, configuracionResponse, colegiosPublicosResponse, mesasPublicasResponse, reportesResponse, participacionResponse] = await Promise.all([
       !silencioso && !cartografiaCargadaRef.current
         ? fetch(municipioUrl).then(async (r) => {
             if (!r.ok) throw new Error(`No se encontró ${municipioUrl}. Colocá el archivo en public/la-matanza-municipio.geojson.`);
@@ -850,6 +860,8 @@ export default function Elecciones2027() {
           }).catch((e) => { setMensaje(e instanceof Error ? e.message : 'No se pudo cargar la cartografía de circuitos.'); return null; })
         : Promise.resolve(null),
       supabase.from('elecciones_partidos').select('id,nombre,sigla,color').eq('activo', true),
+      supabase.from('elecciones_listas').select('id,partido_id,nombre,sigla,candidato_principal,color,activo,orden').order('orden').order('nombre'),
+      supabase.from('elecciones_configuracion').select('modalidad').eq('id', 1).maybeSingle(),
       supabase.from('elecciones_colegios').select('id,nombre,nombre_normalizado,identificador_kml,circuito').eq('activo', true).order('nombre'),
       supabase.from('elecciones_mesas').select('id,numero,electores_habilitados,colegio_id').eq('activo', true).order('numero'),
       supabase.from('elecciones_reportes_escrutinio')
@@ -871,6 +883,8 @@ export default function Elecciones2027() {
     }
 
     if (!partidosResponse.error && partidosResponse.data) setPartidos(partidosResponse.data as Partido[]);
+    if (!listasResponse.error && listasResponse.data) setListasElectorales(listasResponse.data as ListaElectoral[]);
+    if (!configuracionResponse.error && configuracionResponse.data?.modalidad) setModalidadElectoral(configuracionResponse.data.modalidad as 'general' | 'paso');
     // El conteo oficial se obtiene desde una vista SQL calculada sobre las tablas reales.
     const { data: resumenDB, error: resumenError } = await supabase
       .from('elecciones_resumen_general')
@@ -1407,6 +1421,45 @@ export default function Elecciones2027() {
     } finally {
       setGuardandoPartido(false);
     }
+  };
+
+  const guardarModalidadElectoral = async (modalidad: 'general' | 'paso') => {
+    if (perfil?.rol !== 'administrador_general') return;
+    const { error } = await supabase.from('elecciones_configuracion').update({ modalidad, actualizado_por: perfil.user_id, actualizado_en: new Date().toISOString() }).eq('id', 1);
+    if (error) { setMensaje('No se pudo guardar la modalidad: ' + error.message); return; }
+    setModalidadElectoral(modalidad);
+    setMensaje(modalidad === 'paso' ? 'Modalidad PASO configurada. Recordá que la carga por listas requiere que cada mesa use la pantalla de listas.' : 'Modalidad de elección general guardada.');
+  };
+
+  const guardarListaElectoral = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (perfil?.rol !== 'administrador_general') return;
+    if (!listaPartidoId || !listaNombre.trim() || !listaSigla.trim() || !listaCandidato.trim()) {
+      setMensaje('Completá partido, nombre, sigla y candidato principal de la lista.');
+      return;
+    }
+    setGuardandoLista(true); setMensaje('');
+    const payload = { partido_id: listaPartidoId, nombre: listaNombre.trim(), sigla: listaSigla.trim().toUpperCase(), candidato_principal: listaCandidato.trim(), color: listaColor, activo: true, orden: listasElectorales.length + 1 };
+    try {
+      const query = listaEditandoId
+        ? supabase.from('elecciones_listas').update(payload).eq('id', listaEditandoId)
+        : supabase.from('elecciones_listas').insert(payload);
+      const { error } = await query;
+      if (error) throw error;
+      const { data, error: reloadError } = await supabase.from('elecciones_listas').select('id,partido_id,nombre,sigla,candidato_principal,color,activo,orden').order('orden').order('nombre');
+      if (reloadError) throw reloadError;
+      setListasElectorales((data || []) as ListaElectoral[]);
+      setListaPartidoId(''); setListaNombre(''); setListaSigla(''); setListaCandidato(''); setListaColor('#7c3aed'); setListaEditandoId(null);
+      setMensaje('La lista electoral quedó guardada.');
+    } catch (err) { setMensaje(textoError(err, 'No se pudo guardar la lista electoral.')); }
+    finally { setGuardandoLista(false); }
+  };
+
+  const cambiarEstadoLista = async (lista: ListaElectoral) => {
+    const { error } = await supabase.from('elecciones_listas').update({ activo: !lista.activo }).eq('id', lista.id);
+    if (error) { setMensaje('No se pudo cambiar el estado: ' + error.message); return; }
+    setListasElectorales((actuales) => actuales.map((item) => item.id === lista.id ? { ...item, activo: !item.activo } : item));
+    setMensaje(`La lista ${lista.nombre} quedó ${lista.activo ? 'inactiva' : 'activa'}.`);
   };
 
   const aprobarReporte = async (r: ReportePendiente) => {
@@ -3210,6 +3263,19 @@ export default function Elecciones2027() {
                   )}
 
                   {seccionAdmin === 'partidos' && (
+                    <>
+                    <section className="e27-panel">
+                      <span className="e27-kicker">CONFIGURACIÓN ELECTORAL</span>
+                      <h3>Modalidad de la elección</h3>
+                      <p>La modalidad define cómo se organizará y presentará el escrutinio.</p>
+                      <div className="e27-capture-form">
+                        <label>Tipo de elección
+                          <select value={modalidadElectoral} onChange={(e) => void guardarModalidadElectoral(e.target.value as 'general' | 'paso')}>
+                            <option value="general">Elección general</option><option value="paso">PASO</option>
+                          </select>
+                        </label>
+                      </div>
+                    </section>
                     <section className="e27-panel"><span className="e27-kicker">NUEVO PARTIDO POLÍTICO</span>
                       <form className="e27-capture-form" onSubmit={guardarPartidoEnSupabase}>
                         <label>Nombre del partido<input value={partidoNombre} onChange={(e) => setPartidoNombre(e.target.value)} placeholder="Nombre completo" required /></label>
@@ -3220,6 +3286,25 @@ export default function Elecciones2027() {
                       </form>
                       <div className="e27-party-list admin-party-list">{partidos.map((partido) => <div className="e27-party-row" key={partido.id}><i style={{ background: partido.color }} /><span>{partido.nombre}</span><small>{partido.sigla}</small></div>)}{!partidos.length && <div className="e27-empty-state"><strong>No hay partidos registrados</strong><span>Cuando agregues un partido, quedará guardado en Supabase y aparecerá en la carga de escrutinio.</span></div>}</div>
                     </section>
+                    <section className="e27-panel">
+                      <span className="e27-kicker">ADMINISTRACIÓN DE LISTAS</span>
+                      <h3>{listaEditandoId ? 'Editar lista electoral' : 'Crear lista electoral'}</h3>
+                      <p>Cada lista pertenece a un partido y tiene su propio candidato principal y color identificatorio.</p>
+                      <form className="e27-capture-form" onSubmit={guardarListaElectoral}>
+                        <label>Partido político<select value={listaPartidoId} onChange={(e) => setListaPartidoId(e.target.value)} required><option value="">Seleccionar partido</option>{partidos.map((p) => <option key={p.id} value={p.id}>{p.nombre} · {p.sigla}</option>)}</select></label>
+                        <label>Nombre de la lista<input value={listaNombre} onChange={(e) => setListaNombre(e.target.value)} placeholder="Ej. La Matanza nos une" required /></label>
+                        <label>Sigla o número<input value={listaSigla} onChange={(e) => setListaSigla(e.target.value)} placeholder="LISTA 2" maxLength={24} required /></label>
+                        <label>Candidato principal<input value={listaCandidato} onChange={(e) => setListaCandidato(e.target.value)} placeholder="Nombre y apellido" required /></label>
+                        <label>Color de la lista<input type="color" value={listaColor} onChange={(e) => setListaColor(e.target.value)} /></label>
+                        <div className="e27-winner-line"><i style={{background:listaColor}}/><strong>{listaNombre || 'Vista previa'} · {listaCandidato || 'Candidato principal'}</strong></div>
+                        <div className="e27-user-edit-buttons"><button className="e27-white-button" type="submit" disabled={guardandoLista}>{guardandoLista ? 'Guardando…' : listaEditandoId ? 'Guardar cambios' : 'Crear lista'}</button>{listaEditandoId && <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => {setListaEditandoId(null);setListaPartidoId('');setListaNombre('');setListaSigla('');setListaCandidato('');}}>Cancelar edición</button>}</div>
+                      </form>
+                      <div className="e27-party-list admin-party-list">{listasElectorales.map((lista) => {
+                        const partido = partidos.find((p) => p.id === lista.partido_id);
+                        return <div className="e27-party-row" key={lista.id}><i style={{background:lista.color}}/><span><b>{lista.nombre}</b><small>{partido?.nombre || 'Partido'} · {lista.sigla} · Candidato: {lista.candidato_principal}</small></span><small>{lista.activo ? 'Activa' : 'Inactiva'}</small><button type="button" className="e27-edit-saved-button" onClick={() => {setListaEditandoId(lista.id);setListaPartidoId(lista.partido_id);setListaNombre(lista.nombre);setListaSigla(lista.sigla);setListaCandidato(lista.candidato_principal);setListaColor(lista.color);}}>Editar</button><button type="button" className="e27-edit-saved-button" onClick={() => void cambiarEstadoLista(lista)}>{lista.activo ? 'Desactivar' : 'Activar'}</button></div>;
+                      })}{!listasElectorales.length && <div className="e27-empty-state"><strong>Todavía no hay listas</strong><span>Creá las listas que competirán dentro de cada partido.</span></div>}</div>
+                    </section>
+                    </>
                   )}
                   {seccionAdmin === 'escrutinio' && (
                     <>
