@@ -379,6 +379,22 @@ function textoError(error: unknown, fallback: string) {
   return fallback;
 }
 
+async function textoErrorFuncion(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'context' in error) {
+    const context = (error as { context?: unknown }).context;
+    if (context instanceof Response) {
+      try {
+        const body = await context.clone().json() as { error?: unknown; message?: unknown };
+        if (typeof body.error === 'string' && body.error.trim()) return body.error;
+        if (typeof body.message === 'string' && body.message.trim()) return body.message;
+      } catch {
+        // Si la respuesta no trae JSON, usamos el mensaje original.
+      }
+    }
+  }
+  return textoError(error, fallback);
+}
+
 export default function Elecciones2027() {
   const [vista, setVista] = useState<'participacion' | 'municipio' | 'circuitos' | 'colegios'>('participacion');
   const [mostrarLogin, setMostrarLogin] = useState(false);
@@ -559,7 +575,7 @@ export default function Elecciones2027() {
       if (!data?.success) throw new Error(data?.error || 'No se pudo cargar el listado de usuarios.');
       setUsuariosAdmin((data.usuarios ?? []) as UsuarioAdmin[]);
     } catch (err) {
-      setMensaje(err instanceof Error ? err.message : 'No se pudo cargar el listado de usuarios.');
+      setMensaje(await textoErrorFuncion(err, 'No se pudo cargar el listado de usuarios.'));
     } finally {
       setCargandoUsuariosAdmin(false);
     }
@@ -593,7 +609,7 @@ export default function Elecciones2027() {
       setConfirmarNuevaPasswordUsuario('');
       setMensaje('La contraseña se actualizó correctamente.');
     } catch (err) {
-      setMensaje(err instanceof Error ? err.message : 'No se pudo cambiar la contraseña.');
+      setMensaje(await textoErrorFuncion(err, 'No se pudo cambiar la contraseña.'));
     } finally {
       setGuardandoPasswordUsuario(null);
     }
@@ -619,7 +635,7 @@ export default function Elecciones2027() {
       await cargarUsuariosAdmin();
       await cargarPublico();
     } catch (err) {
-      setMensaje(err instanceof Error ? err.message : 'No se pudo actualizar la cantidad de mesas.');
+      setMensaje(await textoErrorFuncion(err, 'No se pudo actualizar la cantidad de mesas.'));
     } finally {
       setGuardandoMesasUsuario(null);
     }
@@ -927,8 +943,28 @@ export default function Elecciones2027() {
   }, [cargando, mesaActiva, mesas, electoresPorMesa, cargarPublico, perfil, cargarPerfil, cargarReportesAdmin]);
 
   useEffect(() => {
+    if (!tipoCarga || !mesaActiva) return;
+    const overflowAnterior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const cerrarConEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && !cargando) {
+        setTipoCarga(null);
+        setMesaActiva(null);
+        setMensaje('');
+      }
+    };
+    window.addEventListener('keydown', cerrarConEscape);
+    return () => {
+      document.body.style.overflow = overflowAnterior;
+      window.removeEventListener('keydown', cerrarConEscape);
+    };
+  }, [tipoCarga, mesaActiva, cargando]);
+
+  useEffect(() => {
     const intervalo = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void actualizarDatos();
+      if (document.visibilityState === 'visible' && perfil?.rol !== 'administrador_general') {
+        void actualizarDatos();
+      }
     }, 15000);
     return () => window.clearInterval(intervalo);
   }, [actualizarDatos]);
@@ -2412,9 +2448,13 @@ export default function Elecciones2027() {
                           {usuariosAdmin.map((usuario) => (
                             <article className="e27-user-card" key={usuario.user_id}>
                               <div className="e27-user-card-top">
-                                <div className="e27-user-avatar">{(usuario.nombre || usuario.email || 'U').trim().slice(0, 1).toUpperCase()}</div>
-                                <div className="e27-user-identity"><strong>{usuario.nombre || 'Sin nombre'}</strong><span>{usuario.email}</span><small>{usuario.activo ? 'Cuenta activa' : 'Cuenta inactiva'}{usuario.creado_en ? ` · Alta ${new Date(usuario.creado_en).toLocaleDateString('es-AR')}` : ''}</small></div>
-                                <span className={`e27-user-status ${usuario.activo ? 'is-active' : 'is-inactive'}`}>{usuario.activo ? 'ACTIVO' : 'INACTIVO'}</span>
+                                <div className="e27-user-avatar" aria-hidden="true">{(usuario.nombre || usuario.email || 'U').trim().slice(0, 1).toUpperCase()}</div>
+                                <div className="e27-user-identity">
+                                  <strong>{usuario.nombre || 'Sin nombre'}</strong>
+                                  <span className="e27-user-email">{usuario.email}</span>
+                                  <small>{usuario.creado_en ? `Alta: ${new Date(usuario.creado_en).toLocaleDateString('es-AR')}` : 'Fecha de alta no disponible'}</small>
+                                </div>
+                                <span className={`e27-user-status ${usuario.activo ? 'is-active' : 'is-inactive'}`}>{usuario.activo ? 'Activo' : 'Inactivo'}</span>
                               </div>
                               <div className="e27-user-actions-row">
                                 <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setUsuarioPasswordEditando(usuarioPasswordEditando === usuario.user_id ? null : usuario.user_id); setNuevaPasswordUsuario(''); setConfirmarNuevaPasswordUsuario(''); setMensaje(''); }}>♧ Cambiar contraseña</button>
@@ -2433,7 +2473,12 @@ export default function Elecciones2027() {
                                   const key = `${usuario.user_id}:${colegio.colegio_id}`;
                                   return (
                                     <div className="e27-user-school-row" key={colegio.colegio_id}>
-                                      <div className="e27-user-school-copy"><small>ESTABLECIMIENTO ASIGNADO · CIRCUITO {colegio.circuito || '—'}</small><strong>{colegio.nombre}</strong><span>{colegio.cantidad_mesas} {colegio.cantidad_mesas === 1 ? 'mesa activa' : 'mesas activas'}{colegio.numeros_mesas.length ? ` · N.º ${colegio.numeros_mesas.join(', ')}` : ''}</span></div>
+                                      <div className="e27-user-school-copy">
+                                        <small>Colegio asignado</small>
+                                        <strong>{colegio.nombre}</strong>
+                                        <span className="e27-user-circuit">Circuito {colegio.circuito || '—'}</span>
+                                        <span className="e27-user-mesas-summary">{colegio.cantidad_mesas} {colegio.cantidad_mesas === 1 ? 'mesa activa' : 'mesas activas'}{colegio.numeros_mesas.length ? ` · N.º ${colegio.numeros_mesas.join(', ')}` : ''}</span>
+                                      </div>
                                       {usuarioMesasEditando === key ? (
                                         <form className="e27-user-mesas-form" onSubmit={(e) => { e.preventDefault(); void guardarCantidadMesasDeUsuario(usuario.user_id, colegio.colegio_id); }}>
                                           <label>Cantidad de mesas<input type="number" min="1" max="100" step="1" value={cantidadMesasUsuario[key] ?? String(colegio.cantidad_mesas || 1)} onChange={(e) => setCantidadMesasUsuario((old) => ({ ...old, [key]: e.target.value }))} required /></label>
@@ -2585,11 +2630,22 @@ export default function Elecciones2027() {
           )}
 
           {tipoCarga && mesaActiva && (
-            <section className="e27-panel e27-capture-panel e27-responsable-capture-panel">
+            <div
+              className="e27-capture-overlay"
+              role="presentation"
+              onMouseDown={(event) => {
+                if (event.target === event.currentTarget && !cargando) {
+                  setTipoCarga(null);
+                  setMesaActiva(null);
+                  setMensaje('');
+                }
+              }}
+            >
+              <section className="e27-panel e27-capture-panel e27-responsable-capture-panel" role="dialog" aria-modal="true" aria-labelledby="e27-capture-title">
               <div className="e27-capture-heading">
                 <div>
                   <span className="e27-kicker">CARGA ASOCIADA AUTOMÁTICAMENTE</span>
-                  <h2>{tipoCarga === 'participacion' ? 'Registrar participación' : 'Cargar escrutinio final'} · Mesa {mesaActiva.numero}</h2>
+                  <h2 id="e27-capture-title">{tipoCarga === 'participacion' ? 'Registrar participación' : 'Cargar escrutinio final'} · Mesa {mesaActiva.numero}</h2>
                   <p>{colegioPorId[mesaActiva.colegio_id]?.nombre} · Circuito {colegioPorId[mesaActiva.colegio_id]?.circuito || '—'}</p>
                 </div>
                 <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => { setTipoCarga(null); setMesaActiva(null); setMensaje(''); }}>Cerrar carga</button>
@@ -2689,7 +2745,8 @@ export default function Elecciones2027() {
                 </form>
               )}
               {mensaje && <div className="e27-feedback e27-capture-feedback" role="status">{mensaje}</div>}
-            </section>
+              </section>
+            </div>
           )}
         </div>
       )}
