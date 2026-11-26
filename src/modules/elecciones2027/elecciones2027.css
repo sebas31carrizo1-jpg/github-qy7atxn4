@@ -4381,3 +4381,53 @@
 .e27-admin-search { display:block; box-sizing:border-box; width:100%; min-width:0; min-height:48px; margin:10px 0 18px; padding:12px 15px; border:1.5px solid #b9dce9; border-radius:12px; background:#fff; color:#17415f; font:inherit; font-size:15px; outline:none; box-shadow:0 2px 8px rgba(20,70,100,.045); }
 .e27-admin-search::placeholder { color:#7793a2; opacity:1; }
 .e27-admin-search:focus { border-color:#168eae; box-shadow:0 0 0 3px rgba(22,142,174,.13); }
+
+
+/* Bandeja de revisión: tarjetas compactas con todos los datos del reporte. */
+.e27-review-grid {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));
+  gap:13px;
+  align-items:stretch;
+}
+.e27-review-grid .e27-review-card {
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-width:0;
+  box-sizing:border-box;
+  padding:15px;
+  border:1px solid #b9dce9;
+  border-radius:14px;
+  background:#f8fcfe;
+  box-shadow:0 3px 12px rgba(20,70,100,.055);
+}
+.e27-review-card-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.e27-review-type { display:inline-flex; align-items:center; padding:5px 8px; border-radius:7px; background:#e2f4f9; color:#087f9f; font-size:10px; font-weight:900; letter-spacing:.7px; }
+.e27-review-type.is-scrutiny { background:#e9edf8; color:#455d91; }
+.e27-review-date { color:#708999; font-size:10px; text-align:right; }
+.e27-review-card h4 { margin:0; color:#174b67; font-size:17px; line-height:1.25; overflow-wrap:anywhere; }
+.e27-review-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; }
+.e27-review-meta > span { display:flex; flex-direction:column; gap:3px; min-width:0; padding:7px 8px; border-radius:8px; background:#edf6fa; color:#315c73; font-size:11px; overflow-wrap:anywhere; }
+.e27-review-meta > span:first-child { grid-column:1 / -1; }
+.e27-review-meta b { color:#7792a1; font-size:9px; text-transform:uppercase; letter-spacing:.55px; }
+.e27-review-detail { display:flex; flex-direction:column; gap:9px; padding-top:9px; border-top:1px solid #d7eaf1; }
+.e27-review-total { display:flex; flex-direction:column; gap:3px; }
+.e27-review-total > small { color:#1685a2; font-size:9px; font-weight:900; letter-spacing:.7px; }
+.e27-review-total > strong { color:#174b67; font-size:23px; line-height:1.15; font-weight:900; }
+.e27-review-total > strong small { font-size:11px; font-weight:700; }
+.e27-review-total > span { color:#607f91; font-size:10px; line-height:1.4; }
+.e27-review-hours,.e27-review-votes { display:flex; flex-direction:column; gap:5px; max-height:190px; overflow:auto; }
+.e27-review-hours > span,.e27-review-votes > span { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:8px; padding:6px 8px; border-radius:7px; background:#fff; color:#45687b; font-size:11px; }
+.e27-review-hours > span strong,.e27-review-votes > span strong { color:#174b67; font-size:12px; font-variant-numeric:tabular-nums; }
+.e27-review-hours > span em,.e27-review-votes > span em { color:#087f9f; font-size:10px; font-style:normal; font-weight:850; text-align:right; }
+.e27-review-votes > span { grid-template-columns:9px minmax(0,1fr) auto auto; }
+.e27-review-votes > span i { width:8px; height:8px; border-radius:3px; }
+.e27-review-votes > span b { min-width:0; font-size:10px; font-weight:700; overflow-wrap:anywhere; }
+.e27-review-approve { width:100%; min-height:42px; margin-top:auto; padding:9px 12px; font-size:12px; }
+@media(max-width:560px) {
+ .e27-review-grid { grid-template-columns:minmax(0,1fr); gap:10px; }
+ .e27-review-grid .e27-review-card { padding:13px; }
+ .e27-review-card h4 { font-size:16px; }
+ .e27-review-hours,.e27-review-votes { max-height:160px; }
+}
