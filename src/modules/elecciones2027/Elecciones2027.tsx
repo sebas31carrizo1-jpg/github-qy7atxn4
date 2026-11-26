@@ -2974,27 +2974,57 @@ export default function Elecciones2027() {
                           <strong>{colegio?.nombre || 'Colegio asignado'}</strong>
                           <span>{mesa.electores_habilitados > 0 ? `${mesa.electores_habilitados.toLocaleString('es-AR')} electores habilitados` : 'Pendiente: informar electores habilitados'}</span>
                         </div>
-                        <div className="e27-responsable-electors-editor">
-                          <label>Electores habilitados reales de esta mesa
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              inputMode="numeric"
-                              value={electoresPorMesa[mesa.id] ?? (mesa.electores_habilitados > 0 ? String(mesa.electores_habilitados) : '')}
-                              onChange={(e) => setElectoresPorMesa((actuales) => ({ ...actuales, [mesa.id]: e.target.value }))}
-                              placeholder="Ingresá la cantidad real"
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            className="e27-save-electors-button"
-                            onClick={() => { void guardarElectoresMesa(mesa); }}
-                            disabled={guardandoElectoresMesa === mesa.id}
-                          >
-                            {guardandoElectoresMesa === mesa.id ? 'Guardando…' : 'Guardar electores'}
-                          </button>
-                        </div>
+                        {mesa.electores_habilitados > 0 && mesaEditandoElectores !== mesa.id ? (
+                          <div className="e27-electors-saved">
+                            <div>
+                              <span>Electores habilitados guardados</span>
+                              <strong>{mesa.electores_habilitados.toLocaleString('es-AR')}</strong>
+                            </div>
+                            <span className="e27-saved-tag">Guardado</span>
+                            <button
+                              type="button"
+                              className="e27-edit-saved-button"
+                              onClick={() => {
+                                setElectoresPorMesa((actuales) => ({ ...actuales, [mesa.id]: String(mesa.electores_habilitados) }));
+                                setMesaEditandoElectores(mesa.id);
+                              }}
+                            >Editar</button>
+                          </div>
+                        ) : (
+                          <div className="e27-responsable-electors-editor is-editing">
+                            <label>Electores habilitados reales de esta mesa
+                              <input
+                                type="number"
+                                min="1"
+                                step="1"
+                                inputMode="numeric"
+                                value={electoresPorMesa[mesa.id] ?? ''}
+                                onChange={(e) => setElectoresPorMesa((actuales) => ({ ...actuales, [mesa.id]: e.target.value }))}
+                                placeholder="Ingresá la cantidad real"
+                              />
+                            </label>
+                            <div className="e27-electors-editor-actions">
+                              <button
+                                type="button"
+                                className="e27-save-electors-button"
+                                onClick={() => { void guardarElectoresMesa(mesa); }}
+                                disabled={guardandoElectoresMesa === mesa.id}
+                              >
+                                {guardandoElectoresMesa === mesa.id ? 'Guardando…' : mesa.electores_habilitados > 0 ? 'Guardar cambios' : 'Guardar electores'}
+                              </button>
+                              {mesa.electores_habilitados > 0 && (
+                                <button
+                                  type="button"
+                                  className="e27-edit-saved-button"
+                                  onClick={() => {
+                                    setMesaEditandoElectores(null);
+                                    setElectoresPorMesa((actuales) => ({ ...actuales, [mesa.id]: String(mesa.electores_habilitados) }));
+                                  }}
+                                >Cancelar</button>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <div className="e27-mesa-actions">
                           <button type="button" className="e27-action-button e27-action-participacion" disabled={mesa.electores_habilitados < 1} onClick={() => { void abrirCarga(mesa, 'participacion'); }}>
                             <span className="e27-action-icon" aria-hidden="true">◷</span>
@@ -3096,40 +3126,136 @@ export default function Elecciones2027() {
                       </div>
                       {cargandoFranjas && <span className="e27-loading-hours">Consultando registros guardados…</span>}
                     </div>
-                    <div className="e27-hours-grid">
-                      {HORARIOS_PARTICIPACION.map((hora) => {
+                    <div className="e27-hours-grid e27-hours-sequential-grid">
+                      {HORARIOS_PARTICIPACION.map((hora, index) => {
                         const guardado = franjasGuardadas[hora] !== undefined;
                         const seleccionado = franjaHora === hora;
+                        const primeraPendiente = indiceSiguienteFranja >= 0 ? HORARIOS_PARTICIPACION[indiceSiguienteFranja] : '';
+                        const habilitado = guardado || hora === primeraPendiente;
+                        const horaAnteriorConDato = HORARIOS_PARTICIPACION.slice(0, index).reverse().find((item) => franjasGuardadas[item] !== undefined);
                         return (
-                          <button
+                          <article
                             key={hora}
-                            type="button"
-                            className={`e27-hour-option ${seleccionado ? 'selected' : ''} ${guardado ? 'saved' : ''}`}
-                            aria-pressed={seleccionado}
-                            onClick={() => seleccionarFranja(hora)}
+                            className={`e27-hour-card ${guardado ? 'is-saved' : ''} ${seleccionado ? 'is-selected' : ''} ${!habilitado ? 'is-locked' : ''}`}
                           >
-                            <strong>{hora}</strong>
-                            <small>{guardado ? `${Number(franjasGuardadas[hora]).toLocaleString('es-AR')} votantes` : 'Sin cargar'}</small>
-                            {guardado && <span>Guardado</span>}
-                          </button>
+                            <div className="e27-hour-card-top">
+                              <strong>{hora}</strong>
+                              {guardado ? <span className="e27-saved-tag">Guardado</span> : !habilitado ? <span className="e27-locked-tag">Bloqueado</span> : <span className="e27-next-tag">Siguiente</span>}
+                            </div>
+                            {guardado ? (
+                              <div className="e27-hour-saved-values">
+                                <b>{Number(franjasGuardadas[hora]).toLocaleString('es-AR')} votantes</b>
+                                {horaAnteriorConDato && (
+                                  <small>Anterior ({horaAnteriorConDato}): {Number(franjasGuardadas[horaAnteriorConDato]).toLocaleString('es-AR')}</small>
+                                )}
+                              </div>
+                            ) : (
+                              <small>{habilitado ? 'Listo para cargar' : 'Completá los horarios anteriores'}</small>
+                            )}
+                            <button
+                              type="button"
+                              className={`e27-hour-edit-button ${guardado ? 'is-edit' : ''}`}
+                              disabled={!habilitado}
+                              aria-pressed={seleccionado}
+                              onClick={() => seleccionarFranja(hora)}
+                            >
+                              {guardado ? 'Editar' : habilitado ? 'Cargar horario' : 'No disponible'}
+                            </button>
+                          </article>
                         );
                       })}
                     </div>
                   </div>
                 </form>
               ) : (
-                <form className="e27-capture-form e27-scrutiny-form" onSubmit={enviarEscrutinio}>
-                  <div className="e27-scrutiny-intro">
-                    <strong>Resultados de la mesa</strong>
-                    <span>Ingresá la cantidad de votos obtenidos por cada partido. Los horarios de control de 08:00 a 18:00 se utilizan en la carga de participación.</span>
-                  </div>
-                  <div className="e27-vote-grid">{partidos.map((p) => <label key={p.id}><span><i style={{ background: p.color }} />{p.nombre}</span><input type="number" min="0" step="1" value={votos[p.id] || ''} onChange={(e) => setVotos((old) => ({ ...old, [p.id]: e.target.value }))} placeholder="Cantidad de votos" required /></label>)}</div>
-                  <div className="e27-scrutiny-extras">
-                    <label>Votos en blanco<input type="number" min="0" step="1" value={blancos} onChange={(e) => setBlancos(e.target.value)} /></label>
-                    <label>Votos nulos<input type="number" min="0" step="1" value={nulos} onChange={(e) => setNulos(e.target.value)} /></label>
-                  </div>
-                  <button className="e27-save-participation" type="submit" disabled={cargando}>{cargando ? 'Enviando…' : 'Enviar escrutinio a revisión'}</button>
-                </form>
+                <div className="e27-scrutiny-workflow">
+                  {votantesUltimoRegistro === null ? (
+                    <div className="e27-scrutiny-blocked">
+                      <strong>Primero cargá la participación de esta mesa</strong>
+                      <span>Para habilitar el escrutinio necesitamos el último acumulado de votantes guardado en la mesa.</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="e27-scrutiny-turnout-card">
+                        <div>
+                          <small>PARTICIPACIÓN REGISTRADA · {horaUltimoRegistro || 'ÚLTIMO HORARIO'}</small>
+                          <strong>{votantesUltimoRegistro.toLocaleString('es-AR')} <span>personas votaron</span></strong>
+                          <span>Sobre {electoresMesaActiva.toLocaleString('es-AR')} electores habilitados</span>
+                        </div>
+                        <div className="e27-turnout-ratio">
+                          <strong>{electoresMesaActiva ? Math.round(votantesUltimoRegistro / electoresMesaActiva * 100) : 0}%</strong>
+                          <small>de participación</small>
+                        </div>
+                      </div>
+
+                      {escrutinioGuardado && !escrutinioEditando ? (
+                        <div className="e27-scrutiny-saved-card">
+                          <div className="e27-scrutiny-saved-heading">
+                            <div>
+                              <span className="e27-saved-tag">Escrutinio guardado</span>
+                              <strong>Resultados registrados</strong>
+                              <small>{escrutinioGuardado.estado === 'publicado' ? 'Publicado' : 'En revisión de la administración'}</small>
+                            </div>
+                            <div className="e27-scrutiny-total">
+                              <small>Total escrutado</small>
+                              <strong>{(Object.values(escrutinioGuardado.votos_partidos).reduce((a, b) => a + b, 0) + escrutinioGuardado.votos_blancos + escrutinioGuardado.votos_nulos).toLocaleString('es-AR')}</strong>
+                            </div>
+                          </div>
+                          <div className="e27-scrutiny-saved-parties">
+                            {partidos.map((partido) => (
+                              <div key={partido.id}>
+                                <span><i style={{ background: partido.color }} />{partido.nombre}</span>
+                                <strong>{Number(escrutinioGuardado.votos_partidos[partido.id] ?? 0).toLocaleString('es-AR')}</strong>
+                              </div>
+                            ))}
+                            <div><span>Votos en blanco</span><strong>{escrutinioGuardado.votos_blancos.toLocaleString('es-AR')}</strong></div>
+                            <div><span>Votos nulos</span><strong>{escrutinioGuardado.votos_nulos.toLocaleString('es-AR')}</strong></div>
+                          </div>
+                          {escrutinioDeOtraCuenta ? (
+                            <p>Este reporte pertenece a otra cuenta. Para editarlo, solicitá al Administrador General que revise la asignación.</p>
+                          ) : (
+                            <button type="button" className="e27-edit-saved-button" onClick={() => setEscrutinioEditando(true)}>Editar escrutinio</button>
+                          )}
+                        </div>
+                      ) : (
+                        <form className="e27-capture-form e27-scrutiny-form" onSubmit={enviarEscrutinio}>
+                          <div className="e27-scrutiny-intro">
+                            <strong>{escrutinioGuardado ? 'Editar escrutinio guardado' : 'Cargar resultados de la mesa'}</strong>
+                            <span>Ingresá los votos obtenidos por cada partido. La suma de votos partidarios, blancos y nulos no puede superar las personas que votaron.</span>
+                          </div>
+                          <div className="e27-scrutiny-live-total">
+                            <span>Votantes registrados: <strong>{votantesUltimoRegistro.toLocaleString('es-AR')}</strong></span>
+                            <span>Votos cargados: <strong>{totalEscrutinioActual.toLocaleString('es-AR')}</strong></span>
+                            <span>Disponibles: <strong>{Math.max(0, votantesUltimoRegistro - totalEscrutinioActual).toLocaleString('es-AR')}</strong></span>
+                          </div>
+                          <div className="e27-vote-grid">{partidos.map((p) => <label key={p.id}><span><i style={{ background: p.color }} />{p.nombre}</span><input type="number" min="0" max={votantesUltimoRegistro} step="1" value={votos[p.id] ?? ''} onChange={(e) => setVotos((old) => ({ ...old, [p.id]: e.target.value }))} placeholder="Cantidad de votos" required /></label>)}</div>
+                          <div className="e27-scrutiny-extras">
+                            <label>Votos en blanco<input type="number" min="0" max={votantesUltimoRegistro} step="1" value={blancos} onChange={(e) => setBlancos(e.target.value)} /></label>
+                            <label>Votos nulos<input type="number" min="0" max={votantesUltimoRegistro} step="1" value={nulos} onChange={(e) => setNulos(e.target.value)} /></label>
+                          </div>
+                          {escrutinioSuperaParticipacion && (
+                            <div className="e27-scrutiny-warning" role="alert">
+                              <strong>No se puede guardar el escrutinio</strong>
+                              <span>La suma de los votos supera las {votantesUltimoRegistro.toLocaleString('es-AR')} personas que votaron en esta mesa.</span>
+                            </div>
+                          )}
+                          {escrutinioGuardado && (
+                            <button type="button" className="e27-edit-saved-button" onClick={() => {
+                              setEscrutinioEditando(false);
+                              setVotos(Object.fromEntries(Object.entries(escrutinioGuardado.votos_partidos).map(([id, cantidad]) => [id, String(cantidad)])));
+                              setBlancos(String(escrutinioGuardado.votos_blancos));
+                              setNulos(String(escrutinioGuardado.votos_nulos));
+                              setMensaje('');
+                            }}>Cancelar edición</button>
+                          )}
+                          <button className="e27-save-participation" type="submit" disabled={cargando || escrutinioDeOtraCuenta || escrutinioSuperaParticipacion}>
+                            {cargando ? 'Guardando escrutinio…' : escrutinioGuardado ? 'Guardar correcciones y reenviar a revisión' : 'Enviar escrutinio a revisión'}
+                          </button>
+                        </form>
+                      )}
+                    </>
+                  )}
+                </div>
               )}
               {mensaje && <div className="e27-feedback e27-capture-feedback" role="status">{mensaje}</div>}
               </section>
