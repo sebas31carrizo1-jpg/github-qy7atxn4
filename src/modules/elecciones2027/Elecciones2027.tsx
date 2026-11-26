@@ -3081,29 +3081,55 @@ export default function Elecciones2027() {
                         </div>
                       </div>
 
-                      <label className="e27-voters-field">
-                        <span>¿Cuántas personas votaron hasta este horario?</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max={electoresMesaActiva}
-                          step="1"
-                          inputMode="numeric"
-                          value={votantes}
-                          onChange={(e) => setVotantes(e.target.value)}
-                          placeholder="Ejemplo: 175"
-                          required
-                        />
-                        <small>Ingresá el total acumulado de votantes hasta el horario seleccionado.</small>
-                      </label>
-
-                      <button className="e27-save-participation" type="submit" disabled={cargando || cargandoFranjas || !votantes.trim()}>
-                        {cargando
-                          ? 'Guardando registro…'
-                          : franjasGuardadas[franjaHora] !== undefined
-                            ? 'Actualizar participación de esta hora'
-                            : 'Guardar participación de esta hora'}
-                      </button>
+                      {franjasGuardadas[franjaHora] !== undefined && !franjaEditando ? (
+                        <div className="e27-participation-saved-card">
+                          <div className="e27-participation-saved-copy">
+                            <span>Registro guardado · {franjaHora}</span>
+                            <strong>{Number(franjasGuardadas[franjaHora]).toLocaleString('es-AR')} personas votaron</strong>
+                            {horaPreviaSeleccionada && franjasGuardadas[horaPreviaSeleccionada] !== undefined && (
+                              <small>Registro anterior ({horaPreviaSeleccionada}): {Number(franjasGuardadas[horaPreviaSeleccionada]).toLocaleString('es-AR')} personas</small>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            className="e27-edit-saved-button"
+                            onClick={() => {
+                              setFranjaEditando(true);
+                              setVotantes(franjasGuardadas[franjaHora]);
+                              setMensaje('');
+                            }}
+                          >Editar</button>
+                        </div>
+                      ) : (
+                        <>
+                          <label className="e27-voters-field">
+                            <span>¿Cuántas personas votaron hasta este horario?</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max={electoresMesaActiva}
+                              step="1"
+                              inputMode="numeric"
+                              value={votantes}
+                              onChange={(e) => setVotantes(e.target.value)}
+                              placeholder="Ejemplo: 175"
+                              required
+                            />
+                            <small>
+                              {franjaEditando
+                                ? 'Estás corrigiendo un registro guardado. Se validará contra los acumulados anterior y siguiente.'
+                                : 'Ingresá el total acumulado de votantes hasta este horario.'}
+                            </small>
+                          </label>
+                          <button className="e27-save-participation" type="submit" disabled={cargando || cargandoFranjas || !votantes.trim()}>
+                            {cargando
+                              ? 'Guardando registro…'
+                              : franjaEditando
+                                ? `Guardar corrección de las ${franjaHora}`
+                                : `Guardar acumulado de las ${franjaHora}`}
+                          </button>
+                        </>
+                      )}
                     </div>
 
                     <aside className="e27-participation-meter" aria-live="polite">
