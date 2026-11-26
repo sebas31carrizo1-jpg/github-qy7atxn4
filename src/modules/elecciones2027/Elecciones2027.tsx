@@ -866,7 +866,7 @@ export default function Elecciones2027() {
       supabase.from('elecciones_colegios').select('id,nombre,nombre_normalizado,identificador_kml,circuito').eq('activo', true).order('nombre'),
       supabase.from('elecciones_mesas').select('id,numero,electores_habilitados,colegio_id').eq('activo', true).order('numero'),
       supabase.from('elecciones_reportes_escrutinio')
-        .select('id,mesa_id,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(votos,partido_id,elecciones_partidos(id,nombre,color)),elecciones_mesas(id,numero,colegio_id,elecciones_colegios(id,nombre,nombre_normalizado,identificador_kml,circuito))')
+        .select('id,mesa_id,votos_blancos,votos_nulos,elecciones_escrutinio_partidos(votos,partido_id,elecciones_partidos(id,nombre,color)),elecciones_escrutinio_listas(votos,lista_id,elecciones_listas(id,nombre,sigla,color,candidato_principal,partido_id)),elecciones_mesas(id,numero,colegio_id,elecciones_colegios(id,nombre,nombre_normalizado,identificador_kml,circuito))')
         .eq('estado', 'publicado'),
       supabase.from('elecciones_reportes_participacion')
         .select('id,mesa_id,elecciones_participacion_franjas(votantes,hora),elecciones_mesas(id,numero,colegio_id,electores_habilitados,elecciones_colegios(id,nombre,nombre_normalizado,identificador_kml,circuito))')
@@ -2069,7 +2069,9 @@ export default function Elecciones2027() {
   const votantesActuales = hayValorEnEdicion
     ? Number(votantes)
     : acumuladoPreviaSeleccionada ?? (ultimoHorarioGuardado ? Number(franjasGuardadas[ultimoHorarioGuardado]) : 0);
-  const totalVotosPartidosActual = partidos.reduce((total, partido) => total + (Number(votos[partido.id] || 0) || 0), 0);
+  const totalVotosPartidosActual = modalidadElectoral === 'paso'
+    ? listasElectorales.filter((lista) => lista.activo).reduce((total, lista) => total + (Number(votos[lista.id] || 0) || 0), 0)
+    : partidos.reduce((total, partido) => total + (Number(votos[partido.id] || 0) || 0), 0);
   const totalEscrutinioActual = totalVotosPartidosActual + (Number(blancos || 0) || 0) + (Number(nulos || 0) || 0);
   const escrutinioSuperaParticipacion = votantesUltimoRegistro !== null
     && (totalVotosPartidosActual > votantesUltimoRegistro || totalEscrutinioActual > votantesUltimoRegistro);
@@ -3541,7 +3543,7 @@ export default function Elecciones2027() {
                           </button>
                           <button type="button" className="e27-action-button e27-action-escrutinio" onClick={() => { void abrirCarga(mesa, 'escrutinio'); }}>
                             <span className="e27-action-icon" aria-hidden="true">▤</span>
-                            <span className="e27-action-copy"><strong>Cargar escrutinio</strong><small>Registrar votos por partido</small></span>
+                            <span className="e27-action-copy"><strong>Cargar escrutinio</strong><small>{modalidadElectoral === 'paso' ? 'Registrar votos por lista y candidato' : 'Registrar votos por partido'}</small></span>
                             <span className="e27-action-arrow" aria-hidden="true">→</span>
                           </button>
                         </div>
@@ -3755,7 +3757,7 @@ export default function Elecciones2027() {
                         <form className="e27-capture-form e27-scrutiny-form" onSubmit={enviarEscrutinio}>
                           <div className="e27-scrutiny-intro">
                             <strong>{escrutinioGuardado ? 'Editar escrutinio guardado' : 'Cargar resultados de la mesa'}</strong>
-                            <span>Ingresá los votos obtenidos por cada partido. La suma de votos partidarios, blancos y nulos no puede superar las personas que votaron.</span>
+                            <span>{modalidadElectoral === 'paso' ? 'Ingresá los votos obtenidos por cada lista. El sistema sumará automáticamente los votos de las listas para obtener el total de cada partido.' : 'Ingresá los votos obtenidos por cada partido.'} La suma de votos, blancos y nulos no puede superar las personas que votaron.</span>
                           </div>
                           <div className="e27-scrutiny-live-total">
                             <span>Votantes registrados: <strong>{votantesUltimoRegistro.toLocaleString('es-AR')}</strong></span>
@@ -3776,7 +3778,7 @@ export default function Elecciones2027() {
                           {escrutinioGuardado && (
                             <button type="button" className="e27-edit-saved-button" onClick={() => {
                               setEscrutinioEditando(false);
-                              setVotos(Object.fromEntries(Object.entries(escrutinioGuardado.votos_partidos).map(([id, cantidad]) => [id, String(cantidad)])));
+                              setVotos(Object.fromEntries(Object.entries(modalidadElectoral === 'paso' ? (escrutinioGuardado.votos_listas || {}) : escrutinioGuardado.votos_partidos).map(([id, cantidad]) => [id, String(cantidad)])));
                               setBlancos(String(escrutinioGuardado.votos_blancos));
                               setNulos(String(escrutinioGuardado.votos_nulos));
                               setMensaje('');
