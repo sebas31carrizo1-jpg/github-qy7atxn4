@@ -4486,33 +4486,1070 @@ button,
   }
 }
 
-/* Navegación principal reducida a dos accesos */
-.olm-home-options { display:grid; grid-template-columns:1fr; gap:14px; margin-top:20px; }
-.olm-home-option { display:grid; grid-template-columns:54px minmax(0,1fr) 44px; align-items:center; gap:17px; width:100%; min-height:125px; padding:22px 24px; border:1px solid #fff; border-radius:15px; background:#fff; color:#102033; text-align:left; cursor:pointer; box-shadow:0 9px 24px #0002; transition:transform .18s,box-shadow .18s; }
-.olm-home-option:hover { transform:translateY(-3px); box-shadow:0 14px 30px #0003; }
-.olm-option-number { display:grid; place-items:center; width:48px; height:48px; border-radius:12px; background:#eaf2f8; color:#1b5478; font-size:15px; font-weight:900; }
-.olm-option-copy { display:flex; flex-direction:column; gap:6px; }
-.olm-option-copy small { color:#39708e; font-size:9px; font-weight:900; letter-spacing:1.3px; }
-.olm-option-copy strong { color:#102033; font-size:clamp(18px,2vw,24px); }
-.olm-option-copy em { color:#52677c; font-size:12px; font-style:normal; }
-.olm-option-arrow { display:grid; place-items:center; width:38px; height:38px; border-radius:50%; background:#102f49; color:#fff; font-size:24px; }
-.olm-datos-hub { padding:28px 0 45px; }
-.olm-datos-hub-heading { padding:34px; border:1px solid #2c4b65; border-radius:16px; background:linear-gradient(115deg,#12263d,#164451); }
-.olm-datos-hub-heading h1 { margin:10px 0; color:#fff; font-size:clamp(32px,5vw,52px); }
-.olm-datos-hub-heading h1 span { color:#f2c14e; }
-.olm-datos-hub-heading p { color:#c3d4e3; font-size:14px; }
-.olm-datos-hub-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:15px; margin:18px 0; }
-.olm-datos-card { position:relative; display:flex; flex-direction:column; align-items:flex-start; gap:12px; min-height:205px; padding:23px; border:1px solid #fff; border-radius:13px; background:#fff; color:#102033; text-align:left; cursor:pointer; box-shadow:0 8px 22px #0002; }
-.olm-datos-card > span { color:#47728e; font-size:10px; font-weight:900; }
-.olm-datos-card strong { color:#102033; font-size:21px; }
-.olm-datos-card em { color:#53697d; font-size:12px; font-style:normal; line-height:1.5; }
-.olm-datos-card b { position:absolute; right:20px; bottom:17px; color:#174968; font-size:24px; }
-.olm-datos-card:hover { transform:translateY(-2px); }
-.olm-back-button { min-height:42px; padding:9px 15px; border:1px solid #fff; border-radius:9px; background:#fff; color:#102033; font-weight:800; cursor:pointer; }
-@media(max-width:760px) {
- .olm-datos-hub-grid { grid-template-columns:1fr; }
- .olm-home-option { grid-template-columns:42px minmax(0,1fr) 34px; min-height:105px; padding:16px; gap:12px; }
- .olm-option-number { width:38px; height:38px; }
- .olm-option-copy em { font-size:10px; }
- .olm-datos-hub-heading { padding:22px; }
+/* Tema celeste para toda la aplicación mientras está abierta la administración electoral */
+body:has(.e27-admin-area),
+#root:has(.e27-admin-area),
+.app:has(.e27-admin-area) {
+  background: #e8f6fb !important;
+  color: #17384a !important;
+}
+.app:has(.e27-admin-area) {
+  min-height: 100vh !important;
+}
+.app:has(.e27-admin-area) .contenido {
+  background: #e8f6fb !important;
+  color: #17384a !important;
+}
+.app:has(.e27-admin-area) .encabezado {
+  background: #d9f0f8 !important;
+  border-bottom: 1px solid #b7dce9 !important;
+  color: #16465c !important;
+}
+.app:has(.e27-admin-area) .marca-texto strong,
+.app:has(.e27-admin-area) .marca-texto span {
+  color: #18536b !important;
+}
+.app:has(.e27-admin-area) .estado-header {
+  color: #315e72 !important;
+}
+.app:has(.e27-admin-area) .boton-volver-header,
+.app:has(.e27-admin-area) .boton-login-header {
+  background: #168eae !important;
+  border-color: #168eae !important;
+  color: #ffffff !important;
+}
+.app:has(.e27-admin-area) .footer {
+  background: #d9f0f8 !important;
+  border-top: 1px solid #b7dce9 !important;
+  color: #426b7e !important;
+}
+
+/* ==========================================================
+   TEMA CELESTE GLOBAL — OBSERVATORIO LA MATANZA
+   Se aplica a todas las secciones y módulos de la aplicación.
+   ========================================================== */
+:root {
+  --olm-bg: #e8f6fb;
+  --olm-bg-strong: #d9f0f8;
+  --olm-surface: #f9fdff;
+  --olm-surface-2: #e1f3f9;
+  --olm-border: #b9dce9;
+  --olm-text: #173f53;
+  --olm-muted: #527487;
+  --olm-accent: #168eae;
+  --olm-accent-dark: #116f8b;
+}
+
+html, body, #root, .app {
+  min-height: 100%;
+  background: var(--olm-bg) !important;
+  color: var(--olm-text) !important;
+}
+
+body { min-width: 320px; }
+.app, .contenido, .seccion-contenido, .pagina-modulo {
+  background: var(--olm-bg) !important;
+  color: var(--olm-text) !important;
+}
+.contenido { width: 100%; }
+
+/* Encabezado y navegación */
+.encabezado {
+  background: var(--olm-bg-strong) !important;
+  border-bottom: 1px solid var(--olm-border) !important;
+  color: var(--olm-text) !important;
+}
+.marca-texto strong, .marca-texto span,
+.encabezado-derecha, .estado-header { color: var(--olm-text) !important; }
+.logo {
+  background: #fff !important;
+  border-color: var(--olm-border) !important;
+  color: var(--olm-accent) !important;
+}
+.boton-volver-header, .boton-login-header,
+.selector-eleccion, .boton-secundario, .ficha-volver,
+.historico-volver, .volver-inicio, .circuitos-buscador button {
+  background: var(--olm-accent) !important;
+  border: 1px solid var(--olm-accent) !important;
+  color: #fff !important;
+}
+.boton-volver-header:hover, .boton-secundario:hover,
+.ficha-volver:hover, .historico-volver:hover,
+.volver-inicio:hover, .circuitos-buscador button:hover {
+  background: var(--olm-accent-dark) !important;
+  color: #fff !important;
+}
+
+/* Portadas: reemplaza los fondos azul marino por celeste */
+.portada-hero, .circuitos-hero, .modulo-banner, .ficha-hero,
+.historico-portada {
+  background: linear-gradient(120deg, #d4edf6 0%, #e9f7fb 58%, #c5e8f3 100%) !important;
+  border: 1px solid var(--olm-border) !important;
+  color: var(--olm-text) !important;
+  box-shadow: 0 12px 30px rgba(31, 91, 116, .07) !important;
+}
+.portada-hero h1, .portada-hero h2, .portada-hero p,
+.portada-hero .hero-etiqueta, .portada-hero .hero-pie,
+.circuitos-hero h1, .circuitos-hero p, .circuitos-hero .sobretitulo,
+.modulo-banner h1, .modulo-banner p, .modulo-banner .modulo-etiqueta,
+.ficha-hero h1, .ficha-hero p, .ficha-hero .sobretitulo,
+.historico-portada h1, .historico-portada p, .historico-portada .sobretitulo {
+  color: var(--olm-text) !important;
+}
+.portada-hero h1 span, .hero-etiqueta, .hero-pie,
+.portada-hero .hero-punto { color: var(--olm-accent) !important; }
+.hero-circulo, .hero-monograma, .hero-grafico { opacity: .16 !important; }
+
+/* Tarjetas, módulos y paneles */
+.tarjeta-modulo, .circuito-card, .ficha-dato-card,
+.circuitos-mapa-card, .panel-electoral, .mapa-contenedor,
+.modulo-contenido, .ficha-historico, .leyenda-partidos,
+.historico-opcion, .historico-tab, .ganador-card,
+.aviso-datos, .portada-pie, .conexion-resumen {
+  background: var(--olm-surface) !important;
+  border: 1px solid var(--olm-border) !important;
+  color: var(--olm-text) !important;
+  box-shadow: 0 5px 18px rgba(31, 91, 116, .055) !important;
+}
+.tarjeta-modulo:hover, .circuito-card:hover, .historico-opcion:hover {
+  background: #eef9fc !important;
+  border-color: #83c8dc !important;
+}
+.tarjeta-titulo, .tarjeta-descripcion, .tarjeta-etiqueta,
+.tarjeta-numero, .tarjeta-acceso, .tarjeta-acceso b,
+.portada-intro h2, .portada-intro p, .seccion-cabecera h2,
+.seccion-cabecera p, .panel-electoral-cabecera h2,
+.panel-electoral-cabecera p, .circuitos-mapa-titulo h2,
+.circuitos-mapa-titulo p, .circuitos-listado-titulo h2,
+.circuito-card > strong, .circuito-card-etiqueta,
+.circuito-card-link, .ficha-seccion-titulo h2,
+.ficha-dato-card span, .ficha-dato-card strong,
+.modulo-en-construccion h2, .modulo-en-construccion p,
+.historico-opcion-texto strong, .historico-opcion-texto small,
+.historico-tab strong, .historico-tab small,
+.ganador-card > strong, .ganador-etiqueta,
+.ganador-dato, .ganador-dato b, .ganador-dato span,
+.partido-nombre, .partido-votos, .total-votos,
+.ayuda-circuito, .aviso-datos strong, .aviso-datos span,
+.mapa-barra strong, .mapa-cantidad, .mapa-pie-oscuro {
+  color: var(--olm-text) !important;
+}
+.sobretitulo, .tarjeta-etiqueta, .circuitos-total span,
+.circuitos-mapa-contador, .mapa-cantidad { color: var(--olm-accent-dark) !important; }
+
+/* Fichas y paneles interiores */
+.selector-eleccion, .circuitos-buscador, .circuitos-buscador input,
+.mapa-contenedor, .panel-electoral, .modulo-contenido,
+.ficha-mapa-contenedor, .ficha-historico, .leyenda-partidos {
+  background-color: var(--olm-surface) !important;
+  color: var(--olm-text) !important;
+  border-color: var(--olm-border) !important;
+}
+.selector-eleccion, .circuitos-buscador input {
+  color: var(--olm-text) !important;
+  border: 1px solid var(--olm-border) !important;
+}
+.circuitos-buscador input::placeholder { color: #7895a5 !important; }
+.circuitos-total { background: #dff2f8 !important; border: 1px solid var(--olm-border) !important; }
+.circuitos-total strong { color: var(--olm-text) !important; }
+.circuito-card::after { background: #bce5f1 !important; }
+.historico-tab.activo { background: #dff2f8 !important; border-color: #83c8dc !important; }
+
+/* Tablas, avisos y estados */
+.panel-mensaje, .circuitos-vacio, .modulo-en-construccion,
+.cargando, .aviso-datos {
+  background: var(--olm-surface) !important;
+  color: var(--olm-muted) !important;
+  border-color: var(--olm-border) !important;
+}
+.error-texto { color: #b42332 !important; }
+
+/* Pie de página */
+.footer {
+  background: var(--olm-bg-strong) !important;
+  border-top: 1px solid var(--olm-border) !important;
+  color: var(--olm-muted) !important;
+}
+.footer a { color: var(--olm-accent-dark) !important; }
+
+/* Mapas: mantener el mapa blanco para no alterar la cartografía */
+.mapa, .mapa-ampliado, .mapa-circuitos-general,
+.mapa-ficha, .mapa-contenedor .leaflet-container,
+.circuitos-mapa-card .leaflet-container {
+  background: #fff !important;
+}
+
+/* Ajustes de lectura y pantallas pequeñas */
+button, input, select, textarea { font-family: inherit; }
+@media (max-width: 760px) {
+  .contenido { padding-left: 16px !important; padding-right: 16px !important; }
+  .encabezado { margin-left: -16px !important; margin-right: -16px !important; padding-left: 16px !important; padding-right: 16px !important; }
+  .portada-hero { padding: 28px 22px !important; }
+}
+
+/* ==========================================
+   OLM - BOTONES PRINCIPALES DE LA PORTADA
+   ========================================== */
+
+   .olm-home-options {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    width: 100% !important;
+    margin-top: 24px !important;
+  }
+  
+  .olm-home-option {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    display: grid !important;
+    grid-template-columns: 48px minmax(0, 1fr) 30px !important;
+    align-items: center !important;
+    gap: 17px !important;
+    width: 100% !important;
+    min-height: 112px !important;
+    padding: 19px 22px !important;
+    border: 1px solid #b7dfef !important;
+    border-radius: 15px !important;
+    background: linear-gradient(110deg, #ffffff 0%, #e4f5fc 100%) !important;
+    color: #17415f !important;
+    text-align: left !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    cursor: pointer !important;
+    box-shadow: 0 4px 14px rgba(38, 119, 158, .07) !important;
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease !important;
+  }
+  
+  .olm-home-option:hover {
+    transform: translateY(-3px) !important;
+    border-color: #55b5df !important;
+    background: #ffffff !important;
+    box-shadow: 0 9px 22px rgba(38, 119, 158, .14) !important;
+  }
+  
+  .olm-home-option:focus-visible {
+    outline: 3px solid rgba(22, 142, 174, .3) !important;
+    outline-offset: 3px !important;
+  }
+  
+  .olm-option-number {
+    display: grid !important;
+    place-items: center !important;
+    width: 46px !important;
+    height: 46px !important;
+    border-radius: 12px !important;
+    background: #d5eff9 !important;
+    color: #168eae !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 16px !important;
+    font-weight: 800 !important;
+  }
+  
+  .olm-option-copy {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 5px !important;
+    min-width: 0 !important;
+    white-space: normal !important;
+    text-align: left !important;
+  }
+  
+  .olm-option-copy small {
+    display: block !important;
+    color: #168eae !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 9px !important;
+    font-weight: 800 !important;
+    letter-spacing: 1.3px !important;
+    line-height: 1.4 !important;
+  }
+  
+  .olm-option-copy strong {
+    display: block !important;
+    color: #17415f !important;
+    font-family: 'Source Serif 4', Georgia, serif !important;
+    font-size: 21px !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+  }
+  
+  .olm-option-copy em {
+    display: block !important;
+    color: #58778c !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+    font-size: 12px !important;
+    font-style: normal !important;
+    font-weight: 400 !important;
+    line-height: 1.5 !important;
+  }
+  
+  .olm-option-arrow {
+    display: grid !important;
+    place-items: center !important;
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 50% !important;
+    background: #d5eff9 !important;
+    color: #168eae !important;
+    font-size: 19px !important;
+    font-weight: 700 !important;
+    transition: transform .2s ease !important;
+  }
+  
+  .olm-home-option:hover .olm-option-arrow {
+    transform: translateX(4px) !important;
+  }
+  
+  @media (max-width: 600px) {
+    .olm-home-option {
+      grid-template-columns: 40px minmax(0, 1fr) 24px !important;
+      gap: 11px !important;
+      padding: 15px !important;
+    }
+  
+    .olm-option-number {
+      width: 40px !important;
+      height: 40px !important;
+    }
+  
+    .olm-option-copy strong {
+      font-size: 18px !important;
+    }
+  }
+
+/* ============================================
+   OLM - TEMA CELESTE INTEGRAL PARA TODA LA WEB
+   ============================================ */
+
+   :root {
+    color-scheme: light !important;
+    --olm-fondo: #e8f6fc;
+    --olm-celeste: #d9f0f9;
+    --olm-celeste-medio: #bce5f5;
+    --olm-celeste-fuerte: #75c9ed;
+    --olm-texto: #17415f;
+    --olm-texto-secundario: #52748a;
+    --olm-acento: #168eae;
+    --olm-blanco: #ffffff;
+  }
+  
+  /* Fondo general de toda la aplicación */
+  html,
+  body,
+  #root,
+  .app {
+    min-height: 100% !important;
+    background: #e8f6fc !important;
+    color: #17415f !important;
+    font-family: 'IBM Plex Sans', sans-serif !important;
+  }
+  
+  body {
+    background: #e8f6fc !important;
+  }
+  
+  .contenido {
+    background: transparent !important;
+    color: #17415f !important;
+  }
+  
+  /* Encabezado */
+  .encabezado {
+    background: #d9f0f9 !important;
+    border-bottom: 1px solid #b8dfef !important;
+    color: #17415f !important;
+    box-shadow: 0 3px 12px rgba(31, 103, 139, .06) !important;
+  }
+  
+  .marca-texto strong,
+  .marca-texto span,
+  .encabezado-derecha,
+  .estado-header {
+    color: #17415f !important;
+  }
+  
+  .boton-volver-header,
+  .boton-login-header {
+    background: #168eae !important;
+    color: #ffffff !important;
+    border: 1px solid #168eae !important;
+    border-radius: 9px !important;
+    font-weight: 700 !important;
+  }
+  
+  /* Portada */
+  .portada-hero {
+    background: linear-gradient(115deg, #bce5f5, #e8f6fc 65%, #d2edf8) !important;
+    color: #17415f !important;
+    border: 1px solid #b8dfef !important;
+    box-shadow: 0 8px 25px rgba(31, 103, 139, .08) !important;
+  }
+  
+  .portada-hero h1,
+  .portada-hero p,
+  .hero-etiqueta,
+  .hero-pie {
+    color: #17415f !important;
+  }
+  
+  .portada-hero h1 span {
+    color: #168eae !important;
+  }
+  
+  /* Fondos de secciones y módulos */
+  .pagina-modulo,
+  .pagina-area-datos,
+  .circuitos-dashboard,
+  .historico-principal,
+  .portada-principal,
+  .menu-secciones,
+  .portada-institucional {
+    background: transparent !important;
+    color: #17415f !important;
+  }
+  
+  /* Paneles y tarjetas */
+  .portada-institucional-info,
+  .portada-nota,
+  .portada-pie,
+  .menu-secciones,
+  .tarjeta-modulo,
+  .panel-electoral,
+  .mapa-contenedor,
+  .leyenda-partidos,
+  .circuitos-buscador {
+    background: #f7fcff !important;
+    color: #17415f !important;
+    border-color: #c5e5f2 !important;
+  }
+  
+  /* Títulos y textos */
+  h1, h2, h3, h4,
+  p, span, strong, small, label {
+    color: inherit;
+  }
+  
+  .portada-intro h2,
+  .portada-institucional-info h3,
+  .portada-pie h2,
+  .seccion-cabecera h2,
+  .panel-electoral-cabecera h2,
+  .modulo-banner h1 {
+    color: #17415f !important;
+  }
+  
+  .portada-intro p,
+  .portada-institucional-info p,
+  .portada-nota p,
+  .portada-pie p,
+  .modulo-banner p {
+    color: #52748a !important;
+  }
+  
+  /* Encabezados de módulos */
+  .modulo-banner,
+  .circuitos-hero {
+    background: linear-gradient(110deg, #bce5f5, #e8f6fc 65%, #d2edf8) !important;
+    color: #17415f !important;
+    border: 1px solid #b8dfef !important;
+  }
+  
+  .modulo-banner h1,
+  .modulo-banner p,
+  .circuitos-hero h1,
+  .circuitos-hero p {
+    color: #17415f !important;
+  }
+  
+  /* Botones generales */
+  button {
+    font-family: 'IBM Plex Sans', sans-serif !important;
+  }
+  
+  .volver-inicio,
+  .boton-secundario,
+  .historico-volver {
+    background: #d9f0f9 !important;
+    color: #17415f !important;
+    border: 1px solid #a9d9ed !important;
+  }
+  
+  /* Formularios */
+  input,
+  select,
+  textarea {
+    color: #17415f !important;
+    background: #ffffff !important;
+    border: 1px solid #b8dfef !important;
+  }
+  
+  /* Pie de página */
+  .portada-pie {
+    background: #d9f0f9 !important;
+    border-color: #b8dfef !important;
+  }
+  
+  /* Conservamos los mapas legibles */
+  .mapa,
+  .leaflet-container {
+    background: #eef7fb !important;
+  }
+  
+  /* Adaptación de pantallas */
+  @media (max-width: 720px) {
+    .contenido {
+      padding-left: 18px !important;
+      padding-right: 18px !important;
+    }
+  }
+
+
+
+/* =========================================================
+   OBSERVATORIO LA MATANZA — TEMA CELESTE GLOBAL DEFINITIVO
+   Este bloque unifica el fondo, las superficies y la tipografía
+   de TODAS las secciones de la aplicación.
+   ========================================================= */
+
+:root {
+  color-scheme: light !important;
+  --olm-bg: #e8f6fc;
+  --olm-bg-soft: #d9f0f9;
+  --olm-bg-card: #f8fcff;
+  --olm-bg-card-strong: #ffffff;
+  --olm-border: #b8dfef;
+  --olm-border-soft: #cce8f4;
+  --olm-primary: #168eae;
+  --olm-primary-dark: #117895;
+  --olm-text: #17415f;
+  --olm-muted: #52748a;
+  --olm-font: 'IBM Plex Sans', Arial, sans-serif;
+  --olm-heading: 'Source Serif 4', Georgia, serif;
+}
+
+/* Fondo raíz: no debe quedar ningún lienzo azul marino */
+html,
+body,
+#root,
+.app {
+  min-height: 100vh !important;
+  background-color: var(--olm-bg) !important;
+  color: var(--olm-text) !important;
+  font-family: var(--olm-font) !important;
+}
+
+body {
+  margin: 0;
+  background-image: none !important;
+}
+
+#root,
+.app,
+.contenido {
+  color: var(--olm-text) !important;
+}
+
+/* Tipografía uniforme y legible en toda la aplicación */
+#root .app,
+#root .app button,
+#root .app input,
+#root .app select,
+#root .app textarea {
+  font-family: var(--olm-font) !important;
+}
+
+#root .app h1,
+#root .app h2,
+#root .app h3,
+#root .app h4 {
+  color: var(--olm-text) !important;
+  font-family: var(--olm-heading) !important;
+}
+
+#root .app p,
+#root .app label,
+#root .app li {
+  color: var(--olm-muted);
+}
+
+/* Encabezado y navegación */
+#root .encabezado,
+#root header,
+#root .app-header,
+#root .navbar {
+  background: var(--olm-bg-soft) !important;
+  color: var(--olm-text) !important;
+  border-color: var(--olm-border) !important;
+  box-shadow: 0 3px 14px rgba(31, 103, 139, .06) !important;
+}
+
+#root .marca-texto strong,
+#root .marca-texto span,
+#root .encabezado-derecha,
+#root .estado-header {
+  color: var(--olm-text) !important;
+}
+
+/* Portadas y banners: reemplaza los degradados azul oscuro */
+#root .portada-hero,
+#root .modulo-banner,
+#root .circuitos-hero,
+#root .ficha-hero,
+#root .hero,
+#root .page-hero,
+#root .section-hero {
+  background: linear-gradient(115deg, #c8eaf7 0%, #e8f6fc 58%, #d5eff9 100%) !important;
+  color: var(--olm-text) !important;
+  border: 1px solid var(--olm-border) !important;
+  box-shadow: 0 8px 25px rgba(30, 91, 123, .07) !important;
+}
+
+#root .portada-hero h1,
+#root .portada-hero p,
+#root .portada-hero .hero-etiqueta,
+#root .portada-hero .hero-pie,
+#root .modulo-banner h1,
+#root .modulo-banner p,
+#root .circuitos-hero h1,
+#root .circuitos-hero p,
+#root .ficha-hero h1,
+#root .ficha-hero p {
+  color: var(--olm-text) !important;
+}
+
+#root .portada-hero h1 span {
+  color: var(--olm-primary) !important;
+}
+
+/* Todas las áreas de contenido conservan el lienzo celeste */
+#root .contenido,
+#root .pagina-modulo,
+#root .pagina-area-datos,
+#root .circuitos-dashboard,
+#root .historico-principal,
+#root .portada-principal,
+#root .menu-secciones,
+#root .portada-institucional,
+#root main,
+#root .main-content,
+#root .page-content {
+  background-color: transparent !important;
+  color: var(--olm-text) !important;
+}
+
+/* Tarjetas y paneles: superficies claras, no bloques azul oscuro */
+#root .tarjeta-modulo,
+#root .portada-institucional-info,
+#root .portada-nota,
+#root .portada-pie,
+#root .panel-electoral,
+#root .mapa-contenedor,
+#root .leyenda-partidos,
+#root .circuitos-buscador,
+#root .circuitos-mapa-card,
+#root .circuito-card,
+#root .ficha-mapa-contenedor,
+#root .ficha-dato-card,
+#root .ficha-historico,
+#root .modulo-contenido,
+#root .card,
+#root .panel,
+#root .dashboard-card,
+#root .content-card {
+  background: var(--olm-bg-card-strong) !important;
+  color: var(--olm-text) !important;
+  border-color: var(--olm-border-soft) !important;
+  box-shadow: 0 5px 18px rgba(31, 103, 139, .06) !important;
+}
+
+/* Tarjetas principales de la portada */
+#root .tarjeta-electoral,
+#root .tarjeta-circuitos,
+#root .tarjeta-datos,
+#root .tarjeta-escrutinio,
+#root .tarjeta-poblacion,
+#root .tarjeta-territorio,
+#root .tarjeta-noticias,
+#root .tarjeta-estadisticas,
+#root .tarjeta-concejo {
+  background: linear-gradient(125deg, #d9f0f9, #f8fcff) !important;
+  color: var(--olm-text) !important;
+  border: 1px solid var(--olm-border) !important;
+  box-shadow: 0 6px 18px rgba(31, 103, 139, .07) !important;
+}
+
+#root .tarjeta-modulo .tarjeta-numero,
+#root .tarjeta-modulo .tarjeta-etiqueta,
+#root .tarjeta-modulo .tarjeta-titulo,
+#root .tarjeta-modulo .tarjeta-descripcion,
+#root .tarjeta-modulo .tarjeta-acceso,
+#root .tarjeta-modulo .tarjeta-fondo {
+  color: var(--olm-text) !important;
+}
+
+#root .tarjeta-icono {
+  background: #c8eaf7 !important;
+  border-color: var(--olm-border) !important;
+  color: var(--olm-primary-dark) !important;
+}
+
+/* Botones: celeste institucional, texto legible */
+#root .app button,
+#root .boton-volver-header,
+#root .boton-login-header,
+#root .volver-inicio,
+#root .ficha-volver,
+#root .login-submit {
+  font-family: var(--olm-font) !important;
+  font-weight: 700 !important;
+}
+
+#root .boton-volver-header,
+#root .boton-login-header,
+#root .login-submit,
+#root .volver-inicio {
+  background: var(--olm-primary) !important;
+  color: #ffffff !important;
+  border: 1px solid var(--olm-primary) !important;
+}
+
+#root .boton-volver-header:hover,
+#root .boton-login-header:hover,
+#root .login-submit:hover,
+#root .volver-inicio:hover {
+  background: var(--olm-primary-dark) !important;
+  color: #ffffff !important;
+}
+
+#root .boton-secundario,
+#root .ficha-volver,
+#root .circuitos-buscador button,
+#root .historico-volver {
+  background: var(--olm-bg-soft) !important;
+  color: var(--olm-text) !important;
+  border: 1px solid var(--olm-border) !important;
+}
+
+/* Formularios y selectores */
+#root .app input,
+#root .app select,
+#root .app textarea {
+  background: #ffffff !important;
+  color: var(--olm-text) !important;
+  border: 1px solid var(--olm-border) !important;
+  border-radius: 9px;
+}
+
+#root .app input::placeholder,
+#root .app textarea::placeholder {
+  color: #829cac !important;
+  opacity: 1;
+}
+
+#root .app input:focus,
+#root .app select:focus,
+#root .app textarea:focus {
+  outline: none !important;
+  border-color: var(--olm-primary) !important;
+  box-shadow: 0 0 0 3px rgba(22, 142, 174, .13) !important;
+}
+
+/* Tablas y listados */
+#root .app table,
+#root .app thead,
+#root .app tbody,
+#root .app tr,
+#root .app td,
+#root .app th {
+  color: var(--olm-text);
+  border-color: var(--olm-border-soft);
+}
+
+#root .app th {
+  background: var(--olm-bg-soft) !important;
+}
+
+/* Etiquetas, textos auxiliares y separadores */
+#root .sobretitulo,
+#root .modulo-etiqueta,
+#root .tarjeta-etiqueta,
+#root .circuito-card-etiqueta {
+  color: var(--olm-primary-dark) !important;
+}
+
+#root .footer,
+#root footer {
+  background: var(--olm-bg-soft) !important;
+  color: var(--olm-muted) !important;
+  border-color: var(--olm-border) !important;
+}
+
+/* Login: modal claro, sin modificar su funcionamiento */
+#root .login-modal {
+  background: #ffffff !important;
+  color: var(--olm-text) !important;
+  border: 1px solid var(--olm-border) !important;
+}
+
+#root .login-modal h2,
+#root .login-modal label {
+  color: var(--olm-text) !important;
+}
+
+#root .login-logo {
+  background: var(--olm-bg-soft) !important;
+  color: var(--olm-primary-dark) !important;
+}
+
+/* Secciones de Elecciones 2027: armonización del fondo global */
+#root .e27-private,
+#root .e27-public,
+#root .e27-shell,
+#root .e27-page,
+#root .e27-content,
+#root .e27-dashboard {
+  background: var(--olm-bg) !important;
+  color: var(--olm-text) !important;
+}
+
+#root .e27-panel,
+#root .e27-card,
+#root .e27-review-list,
+#root .e27-capture-form,
+#root .e27-admin-nav {
+  background: #ffffff !important;
+  color: var(--olm-text) !important;
+  border-color: var(--olm-border) !important;
+}
+
+/* El mapa mantiene sus colores cartográficos y capas de datos */
+#root .leaflet-container,
+#root .mapa {
+  background: #eef7fb !important;
+}
+
+/* Ajustes para pantallas pequeñas */
+@media (max-width: 720px) {
+  #root .contenido {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+}
+
+
+/* =========================================================
+   CORRECCION FINAL DE PORTADA — ELIMINAR LOS BLOQUES OSCUROS
+   Fondo celeste general + tarjetas claras + textos legibles.
+   Estas reglas van al final para prevalecer sobre temas viejos.
+   ========================================================= */
+
+:root {
+  color-scheme: light !important;
+  --olm-bg: #e8f6fc;
+  --olm-bg-soft: #d9f0f9;
+  --olm-surface: #f8fcff;
+  --olm-surface-blue: #e4f4fb;
+  --olm-border: #b8dfef;
+  --olm-text: #17415f;
+  --olm-muted: #52748a;
+  --olm-primary: #168eae;
+}
+
+html,
+body,
+#root,
+#root > .app,
+.app,
+.contenido {
+  min-height: 100vh !important;
+  background: #e8f6fc !important;
+  background-image: none !important;
+  color: #17415f !important;
+  font-family: 'IBM Plex Sans', Arial, sans-serif !important;
+}
+
+/* La franja celeste debe ocupar toda la página, no solo el hero */
+#root > .app,
+#root .app,
+#root main.contenido,
+#root .contenido,
+#root .portada-principal,
+#root .pagina-modulo,
+#root .pagina-area-datos,
+#root .circuitos-dashboard,
+#root .historico-principal {
+  background: #e8f6fc !important;
+  background-image: none !important;
+  color: #17415f !important;
+}
+
+/* Dos grandes paneles de la portada: no transparentes ni azul oscuro */
+#root .menu-secciones,
+#root .portada-institucional {
+  background: #f8fcff !important;
+  background-image: none !important;
+  color: #17415f !important;
+  border: 1px solid #b8dfef !important;
+  border-top: 4px solid #75c9ed !important;
+  border-radius: 17px !important;
+  box-shadow: 0 7px 22px rgba(31, 103, 139, .07) !important;
+}
+
+/* Encabezados y copys de esos paneles */
+#root .menu-secciones-encabezado .sobretitulo,
+#root .portada-intro .sobretitulo,
+#root .portada-institucional .sobretitulo {
+  color: #1683a8 !important;
+  font-family: 'IBM Plex Sans', Arial, sans-serif !important;
+  font-weight: 700 !important;
+}
+
+#root .menu-secciones-encabezado h2,
+#root .portada-intro h2,
+#root .portada-institucional h2,
+#root .portada-institucional-info h3 {
+  color: #17415f !important;
+  font-family: 'Source Serif 4', Georgia, serif !important;
+  font-weight: 700 !important;
+  text-shadow: none !important;
+}
+
+#root .menu-secciones-encabezado p,
+#root .portada-intro p,
+#root .portada-institucional p,
+#root .portada-institucional-info p,
+#root .portada-nota p {
+  color: #52748a !important;
+  font-family: 'IBM Plex Sans', Arial, sans-serif !important;
+  opacity: 1 !important;
+}
+
+/* Estado de conexión: pastilla celeste, no barra blanca */
+#root .conexion-resumen {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  width: fit-content !important;
+  max-width: 100% !important;
+  margin-top: 14px !important;
+  padding: 8px 12px !important;
+  border: 1px solid #c4e5f2 !important;
+  border-radius: 999px !important;
+  background: #e6f5fb !important;
+  color: #37677f !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+}
+
+/* Tarjeta interior de información pública */
+#root .portada-institucional-info {
+  background: linear-gradient(135deg, #e6f5fb 0%, #ffffff 100%) !important;
+  background-image: linear-gradient(135deg, #e6f5fb 0%, #ffffff 100%) !important;
+  border: 1px solid #c5e5f2 !important;
+  border-radius: 13px !important;
+  color: #17415f !important;
+}
+
+#root .portada-institucional-info h3 {
+  color: #17415f !important;
+  font-size: 19px !important;
+  line-height: 1.35 !important;
+}
+
+#root .institucional-linea {
+  background: #168eae !important;
+  border-radius: 5px !important;
+}
+
+#root .institucional-datos {
+  border-top: 1px solid #c9e5f1 !important;
+}
+
+#root .institucional-datos strong,
+#root .institucional-datos .dato-numero {
+  color: #1683a8 !important;
+}
+
+#root .institucional-datos span {
+  color: #52748a !important;
+}
+
+/* Accesos principales de Inicio */
+#root .olm-home-option,
+#root .tarjeta-area-principal {
+  background: linear-gradient(110deg, #ffffff 0%, #e4f5fc 100%) !important;
+  color: #17415f !important;
+  border: 1px solid #b8dfef !important;
+}
+
+#root .olm-option-copy small,
+#root .tarjeta-area-principal small {
+  color: #1683a8 !important;
+}
+
+#root .olm-option-copy strong,
+#root .tarjeta-area-principal strong {
+  color: #17415f !important;
+  font-family: 'Source Serif 4', Georgia, serif !important;
+}
+
+#root .olm-option-copy em,
+#root .tarjeta-area-principal em {
+  color: #52748a !important;
+}
+
+#root .olm-option-number,
+#root .olm-option-arrow,
+#root .area-principal-icono {
+  background: #d8f0f9 !important;
+  color: #1683a8 !important;
+}
+
+/* Títulos de secciones en azul petróleo, nunca azul oscuro sobre fondo oscuro */
+#root .portada-institucional-info,
+#root .portada-institucional-info *,
+#root .menu-secciones-encabezado,
+#root .menu-secciones-encabezado * {
+  text-shadow: none !important;
+}
+
+#root .portada-pie,
+#root .portada-nota {
+  background: #f8fcff !important;
+  background-image: none !important;
+  color: #17415f !important;
+  border: 1px solid #b8dfef !important;
+}
+
+#root .portada-pie h2,
+#root .portada-nota strong {
+  color: #17415f !important;
+}
+
+/* El pie de la aplicación conserva la misma identidad */
+#root .footer,
+#root footer {
+  background: #d9f0f9 !important;
+  color: #52748a !important;
+  border-top: 1px solid #b8dfef !important;
+}
+
+/* Evitar fondos oscuros heredados en los contenedores de la app */
+#root .app [class*="panel"],
+#root .app [class*="card"] {
+  color: #17415f;
+}
+
+@media (max-width: 980px) {
+  #root .portada-principal {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+@media (max-width: 720px) {
+  #root .menu-secciones,
+  #root .portada-institucional {
+    padding: 16px !important;
+  }
 }
