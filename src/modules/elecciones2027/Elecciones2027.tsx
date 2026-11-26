@@ -276,11 +276,13 @@ function colorGanadorPorIntensidad(color: string, porcentaje: number) {
 
 function MapaColegios({
   data,
+  municipio,
   colegioSeleccionado,
   resultados,
   onSeleccionar,
 }: {
   data: FeatureCollection | null;
+  municipio: FeatureCollection | null;
   colegioSeleccionado?: string;
   resultados: Record<string, ResultadoGanadorColegio>;
   onSeleccionar: (nombre: string) => void;
@@ -293,8 +295,9 @@ function MapaColegios({
 
   return (
     <MapContainer center={[-34.75, -58.62]} zoom={10} scrollWheelZoom className="e27-map e27-map-college-only">
-      <AjustarMapa data={data} />
+      <AjustarMapa data={municipio ?? data} />
       <CentrarPoligonoColegio data={data} colegioSeleccionado={colegioSeleccionado} />
+      {municipio && <GeoJSON data={municipio as never} style={() => ({ color: '#174b67', weight: 2.2, opacity: 0.95, fillColor: '#e8f5fa', fillOpacity: 0.12, interactive: false })} />}
       <GeoJSON
         key={firmaResultados}
         data={data as never}
@@ -520,6 +523,10 @@ export default function Elecciones2027() {
   const [colegioEditandoId, setColegioEditandoId] = useState<string | null>(null);
   const [colegioNombreEditado, setColegioNombreEditado] = useState('');
   const [guardandoColegio, setGuardandoColegio] = useState<string | null>(null);
+  const [colegioMesasEditandoId, setColegioMesasEditandoId] = useState<string | null>(null);
+  const [configuracionMesasColegio, setConfiguracionMesasColegio] = useState<Record<string, MesaAdminConfiguracion[]>>({});
+  const [guardandoConfiguracionColegio, setGuardandoConfiguracionColegio] = useState<string | null>(null);
+  const [responsableAsignarPorColegio, setResponsableAsignarPorColegio] = useState<Record<string, string>>({});
   const [cantidadColegiosActivos, setCantidadColegiosActivos] = useState(0);
   const [cantidadColegiosCartografiados, setCantidadColegiosCartografiados] = useState(0);
   const [cantidadMesasActivas, setCantidadMesasActivas] = useState(0);
@@ -661,7 +668,7 @@ export default function Elecciones2027() {
   }, [perfil]);
 
   useEffect(() => {
-    if (perfil?.rol === 'administrador_general' && seccionAdmin === 'usuarios') {
+    if (perfil?.rol === 'administrador_general' && (seccionAdmin === 'usuarios' || seccionAdmin === 'colegios')) {
       void cargarUsuariosAdmin();
     }
   }, [perfil, seccionAdmin, cargarUsuariosAdmin]);
@@ -1186,6 +1193,71 @@ export default function Elecciones2027() {
     await supabase.auth.signOut();
     setPerfil(null); setColegios([]); setMesas([]); setReportes([]); setElectoresPorMesa({}); setCantidadColegiosActivos(0); setCantidadColegiosCartografiados(0); setCantidadMesasActivas(0);
     setMensaje('Sesión cerrada.');
+  };
+
+  const iniciarEdicionMesasColegio = (colegioId: string) => {
+    const actuales = mesas.filter((mesa) => mesa.colegio_id === colegioId)
+      .sort((a, b) => Number(a.numero) - Number(b.numero));
+    setConfiguracionMesasColegio((old) => ({
+      ...old,
+      [colegioId]: actuales.map((mesa) => ({ id: mesa.id, numero: String(mesa.numero), reportes_total: 0 })),
+    }));
+    setColegioMesasEditandoId(colegioId);
+    setMensaje('');
+  };
+
+  const guardarConfiguracionColegioAdmin = async (colegio: Colegio) => {
+    const configuracion = configuracionMesasColegio[colegio.id] ?? [];
+    const numeros = configuracion.map((mesa) => Number(mesa.numero));
+    if (configuracion.length < 1 || configuracion.length > 100 ||
+        numeros.some((n) => !Number.isInteger(n) || n < 1 || n > 100000) ||
+        new Set(numeros).size !== numeros.length) {
+      setMensaje('La configuración debe tener entre 1 y 100 mesas, con números enteros y sin repetir.');
+      return;
+    }
+    setGuardandoConfiguracionColegio(colegio.id);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: {
+          action: 'actualizar_configuracion_colegio',
+          colegio_id: colegio.id,
+          nombre: colegio.nombre,
+          mesas: configuracion.map((mesa) => ({ id: mesa.id, numero: Number(mesa.numero) })),
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo guardar la configuración del colegio.');
+      setMensaje(data.mensaje || 'Se guardó la configuración del establecimiento.');
+      setColegioMesasEditandoId(null);
+      setConfiguracionMesasColegio((old) => ({ ...old, [colegio.id]: [] }));
+      await cargarPublico();
+    } catch (err) {
+      setMensaje(await textoErrorFuncion(err, 'No se pudo guardar la configuración del colegio.'));
+    } finally {
+      setGuardandoConfiguracionColegio(null);
+    }
+  };
+
+  const asignarColegioDesdeAdmin = async (colegioId: string) => {
+    const userId = responsableAsignarPorColegio[colegioId];
+    if (!userId) { setMensaje('Seleccioná un responsable antes de asignar el colegio.'); return; }
+    setGuardandoConfiguracionColegio(colegioId);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.functions.invoke('dynamic-elecciones-administrar-usuarios', {
+        body: { action: 'asignar_colegio', user_id: userId, colegio_id: colegioId },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'No se pudo asignar el colegio.');
+      setMensaje(data.mensaje || 'Colegio asignado al responsable.');
+      setResponsableAsignarPorColegio((old) => ({ ...old, [colegioId]: '' }));
+      await cargarUsuariosAdmin();
+    } catch (err) {
+      setMensaje(await textoErrorFuncion(err, 'No se pudo asignar el colegio.'));
+    } finally {
+      setGuardandoConfiguracionColegio(null);
+    }
   };
 
   const guardarNombreColegio = async (e: FormEvent<HTMLFormElement>) => {
@@ -2049,7 +2121,7 @@ export default function Elecciones2027() {
                     </div>
                   </div>
                 </div>
-                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} resultados={resultadosPorColegio} colegioSeleccionado={colegioPublicoActivo?.identificador_kml || colegioPublicoActivo?.nombre_normalizado || colegioPublicoActivo?.nombre || colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
+                <div className="e27-map-wrap e27-map-wrap-colleges"><MapaColegios data={colegiosKml} municipio={municipio} resultados={resultadosPorColegio} colegioSeleccionado={colegioPoligonoSeleccionado} onSeleccionar={seleccionarPoligonoColegio} /></div>
                 <div className="e27-map-foot">{colegiosKml?.features.length ?? '—'} polígonos de establecimientos · La capa de circuitos está excluida</div>
                 <div className="e27-college-map-legend">
                   <div className="e27-college-map-legend-parties">
@@ -2696,7 +2768,7 @@ export default function Elecciones2027() {
                         <div>
                           <span className="e27-kicker">DIRECTORIO DE ESTABLECIMIENTOS</span>
                           <h3>Colegios registrados</h3>
-                          <p>Podés corregir el nombre visible de cada colegio. El circuito, el identificador y las mesas asociadas se mantienen sin cambios.</p>
+                          <p>Administrá el nombre, la numeración oficial de mesas y la asignación de responsables. El circuito y el identificador cartográfico se conservan.</p>
                         </div>
                         <div className="e27-college-admin-count"><strong>{cantidadColegiosActivos || colegios.length}</strong><span>establecimientos activos en Supabase</span></div>
                       </div>
@@ -2712,6 +2784,7 @@ export default function Elecciones2027() {
                                   <small>ESTABLECIMIENTO</small>
                                   <strong>{colegio.nombre}</strong>
                                   <span>Circuito {colegio.circuito || '—'}</span>
+                                  <span>{mesas.filter((mesa) => mesa.colegio_id === colegio.id).length} mesas activas · {mesas.filter((mesa) => mesa.colegio_id === colegio.id).map((mesa) => mesa.numero).sort((a, b) => a - b).join(', ') || 'Sin mesas cargadas'}</span>
                                 </div>
                               </div>
                               {colegioEditandoId === colegio.id ? (
@@ -2736,6 +2809,50 @@ export default function Elecciones2027() {
                                   ✎ Editar nombre
                                 </button>
                               )}
+                              <div className="e27-college-edit-actions">
+                                <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => iniciarEdicionMesasColegio(colegio.id)}>
+                                  {colegioMesasEditandoId === colegio.id ? 'Actualizar mesas' : 'Editar mesas'}
+                                </button>
+                              </div>
+                              {colegioMesasEditandoId === colegio.id && (
+                                <div className="e27-mesas-config">
+                                  <strong>Numeración de mesas</strong>
+                                  {(configuracionMesasColegio[colegio.id] ?? []).map((mesa, indice) => (
+                                    <div className="e27-mesa-config-card" key={mesa.id ?? indice}>
+                                      <label>Mesa {indice + 1}
+                                        <input type="number" min="1" max="100000" value={mesa.numero}
+                                          onChange={(e) => setConfiguracionMesasColegio((old) => ({
+                                            ...old,
+                                            [colegio.id]: (old[colegio.id] ?? []).map((item, i) => i === indice ? { ...item, numero: e.target.value } : item),
+                                          }))} />
+                                      </label>
+                                      <button type="button" className="e27-white-button e27-white-button-outline"
+                                        onClick={() => setConfiguracionMesasColegio((old) => ({ ...old, [colegio.id]: (old[colegio.id] ?? []).filter((_, i) => i !== indice) }))}>Quitar</button>
+                                    </div>
+                                  ))}
+                                  <div className="e27-college-edit-actions">
+                                    <button type="button" className="e27-white-button e27-white-button-outline"
+                                      onClick={() => setConfiguracionMesasColegio((old) => ({ ...old, [colegio.id]: [...(old[colegio.id] ?? []), { id: null, numero: String(Math.max(0, ...(old[colegio.id] ?? []).map((m) => Number(m.numero) || 0)) + 1), reportes_total: 0 }] }))}>+ Agregar mesa</button>
+                                    <button type="button" className="e27-white-button"
+                                      disabled={guardandoConfiguracionColegio === colegio.id}
+                                      onClick={() => guardarConfiguracionColegioAdmin(colegio)}>
+                                      {guardandoConfiguracionColegio === colegio.id ? 'Guardando…' : 'Guardar mesas'}
+                                    </button>
+                                    <button type="button" className="e27-white-button e27-white-button-outline"
+                                      onClick={() => setColegioMesasEditandoId(null)}>Cancelar</button>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="e27-college-edit-actions">
+                                <select value={responsableAsignarPorColegio[colegio.id] ?? ''}
+                                  onChange={(e) => setResponsableAsignarPorColegio((old) => ({ ...old, [colegio.id]: e.target.value }))}>
+                                  <option value="">Asignar a responsable…</option>
+                                  {usuariosAdmin.filter((u) => u.activo).map((u) => <option key={u.user_id} value={u.user_id}>{u.nombre} · {u.email}</option>)}
+                                </select>
+                                <button type="button" className="e27-white-button"
+                                  disabled={guardandoConfiguracionColegio === colegio.id || !responsableAsignarPorColegio[colegio.id]}
+                                  onClick={() => asignarColegioDesdeAdmin(colegio.id)}>Asignar colegio</button>
+                              </div>
                             </article>
                           ))}
                         </div>
