@@ -3262,12 +3262,88 @@ export default function Elecciones2027() {
                         </section>
                       )}
                       {pestanaEscrutinio === 'publicados' && (
-                        <section className="e27-panel">
-                          <div className="e27-panel-heading"><div><span className="e27-kicker">SEGUIMIENTO DEL ESCRUTINIO</span><h3>Avance de resultados publicados</h3><p>Solo se contarán escrutinios aprobados y publicados sobre el total de mesas activas.</p></div></div>
-                          <label className="e27-dashboard-filter">Circuito electoral<select value={circuitoDashboard} onChange={(e) => setCircuitoDashboard(e.target.value)}><option value="">Seleccionar circuito</option>{CIRCUITOS_ELECTORALES.map((circuito) => <option key={circuito} value={circuito}>{circuito}</option>)}</select></label>
-                          <div className="e27-dashboard-stats"><article><small>LA MATANZA</small><strong>—%</strong><span>Mesas publicadas / mesas totales</span></article><article><small>CIRCUITO {circuitoDashboard || '—'}</small><strong>—%</strong><span>Mesas publicadas / mesas del circuito</span></article></div>
-                          <div className="e27-empty-state"><strong>{circuitoDashboard ? `Escuelas del circuito ${circuitoDashboard}` : 'Seleccioná un circuito para consultar sus escuelas'}</strong><span>Al conectar esta vista con Supabase se listarán los colegios y sus mesas. Cada colegio podrá desplegarse para ver el avance de publicación, distinguiendo reportes recibidos de reportes aprobados.</span></div>
-                          <div className="e27-dashboard-legend"><span><i className="e27-dot e27-dot-received" /> Reportes recibidos</span><span><i className="e27-dot e27-dot-published" /> Resultados publicados</span></div>
+                        <section className="e27-panel e27-published-dashboard">
+                          {(() => {
+                            const escuelasPorId = new Map(colegiosPublicos.map((colegio) => [colegio.id, colegio]));
+                            const circuitoDeMesa = (mesaId: string) => {
+                              const mesa = mesasPublicas.find((item) => item.id === mesaId);
+                              return mesa ? String(escuelasPorId.get(mesa.colegio_id)?.circuito || '').trim() : '';
+                            };
+                            const mesasPorCircuito: Record<string, Mesa[]> = {};
+                            for (const mesa of mesasPublicas) {
+                              const circuito = String(escuelasPorId.get(mesa.colegio_id)?.circuito || '').trim();
+                              if (!circuito) continue;
+                              (mesasPorCircuito[circuito] ||= []).push(mesa);
+                            }
+                            const reportesPorMesa = new Map<string, any>();
+                            for (const reporte of reportesEscrutinioPublicos) reportesPorMesa.set(String(reporte.mesa_id), reporte);
+                            const circuitos = [...new Set([...CIRCUITOS_ELECTORALES, ...Object.keys(mesasPorCircuito)])].sort((a,b) => a.localeCompare(b,'es',{numeric:true}));
+                            const calcularResultados = (codigo?: string) => {
+                              const partidos: Record<string,{nombre:string;color:string;votos:number}> = {};
+                              let blancos=0, nulos=0, mesasPublicadas=0;
+                              const mesasDelAmbito = codigo ? (mesasPorCircuito[codigo] || []) : mesasPublicas;
+                              for (const mesa of mesasDelAmbito) {
+                                const reporte = reportesPorMesa.get(String(mesa.id));
+                                if (!reporte) continue;
+                                mesasPublicadas++;
+                                blancos += Number(reporte.votos_blancos || 0);
+                                nulos += Number(reporte.votos_nulos || 0);
+                                for (const fila of reporte.elecciones_escrutinio_partidos || []) {
+                                  const partidoRel = fila.elecciones_partidos;
+                                  const partido = Array.isArray(partidoRel) ? partidoRel[0] : partidoRel;
+                                  if (!partido) continue;
+                                  const id = String(fila.partido_id || partido.id);
+                                  if (!partidos[id]) partidos[id] = { nombre: partido.nombre, color: partido.color || '#168eae', votos: 0 };
+                                  partidos[id].votos += Number(fila.votos || 0);
+                                }
+                              }
+                              const lista = Object.values(partidos).sort((a,b) => b.votos-a.votos);
+                              const votosPartidos = lista.reduce((sum,p) => sum+p.votos,0);
+                              const total = votosPartidos + blancos + nulos;
+                              return { mesasPublicadas, mesasTotales: mesasDelAmbito.length, porcentajeMesas: mesasDelAmbito.length ? mesasPublicadas/mesasDelAmbito.length*100 : 0, lista, blancos, nulos, total };
+                            };
+                            const municipal = calcularResultados();
+                            const seleccionado = circuitoDashboard;
+                            const detalle = seleccionado ? calcularResultados(seleccionado) : municipal;
+                            const ambito = seleccionado ? `Circuito ${seleccionado}` : 'La Matanza';
+                            return <>
+                              <div className="e27-published-heading">
+                                <div><span className="e27-kicker">SEGUIMIENTO DEL ESCRUTINIO</span><h3>Avance de resultados publicados</h3><p>Conteo exclusivo de mesas con escrutinio aprobado y publicado.</p></div>
+                                <label className="e27-dashboard-filter">Consultar
+                                  <select value={circuitoDashboard} onChange={(e) => setCircuitoDashboard(e.target.value)}>
+                                    <option value="">La Matanza · Total municipal</option>
+                                    {circuitos.map((circuito) => <option key={circuito} value={circuito}>Circuito {circuito}</option>)}
+                                  </select>
+                                </label>
+                              </div>
+                              <div className="e27-published-summary">
+                                <article className="is-municipal"><small>LA MATANZA · AVANCE GENERAL</small><strong>{municipal.porcentajeMesas.toFixed(1)}%</strong><b>{numeroAR(municipal.mesasPublicadas)} / {numeroAR(municipal.mesasTotales)} mesas publicadas</b><div className="e27-published-track"><span style={{width:`${municipal.porcentajeMesas}%`}} /></div></article>
+                                <article><small>{ambito.toUpperCase()} · AVANCE</small><strong>{detalle.porcentajeMesas.toFixed(1)}%</strong><b>{numeroAR(detalle.mesasPublicadas)} / {numeroAR(detalle.mesasTotales)} mesas publicadas</b><div className="e27-published-track"><span style={{width:`${detalle.porcentajeMesas}%`}} /></div></article>
+                              </div>
+                              <div className="e27-published-circuits">
+                                <div className="e27-published-section-title"><div><span className="e27-kicker">AVANCE TERRITORIAL</span><h4>Mesas publicadas por circuito</h4></div><small>{circuitos.length} circuitos</small></div>
+                                <div className="e27-published-circuit-grid">
+                                  {circuitos.map((codigo) => {
+                                    const dato = calcularResultados(codigo);
+                                    return <button type="button" key={codigo} className={`e27-published-circuit ${seleccionado===codigo?'is-selected':''}`} onClick={() => setCircuitoDashboard(codigo)}>
+                                      <span>CIRCUITO {codigo}</span><strong>{dato.porcentajeMesas.toFixed(1)}%</strong><b>{numeroAR(dato.mesasPublicadas)} / {numeroAR(dato.mesasTotales)} mesas</b><i><span style={{width:`${dato.porcentajeMesas}%`}} /></i>
+                                    </button>;
+                                  })}
+                                </div>
+                              </div>
+                              <div className="e27-published-results">
+                                <div className="e27-published-section-title"><div><span className="e27-kicker">RESULTADOS DEL ESCRUTINIO</span><h4>{ambito}</h4></div><small>{numeroAR(detalle.mesasPublicadas)} mesas computadas</small></div>
+                                {detalle.mesasPublicadas === 0 ? <div className="e27-empty-state"><strong>Todavía no hay escrutinios publicados en {ambito}</strong><span>Los resultados aparecerán acá a medida que la administración apruebe y publique las mesas.</span></div> : <>
+                                  <div className="e27-published-vote-total"><span>TOTAL DE VOTOS COMPUTADOS</span><strong>{numeroAR(detalle.total)}</strong><small>Blancos: {numeroAR(detalle.blancos)} · Nulos: {numeroAR(detalle.nulos)}</small></div>
+                                  <div className="e27-published-party-list">
+                                    {detalle.lista.map((partido,index) => <div className="e27-published-party" key={`${partido.nombre}-${index}`}><i style={{background:partido.color}}/><span>{partido.nombre}</span><strong>{numeroAR(partido.votos)}</strong><b>{detalle.total ? (partido.votos/detalle.total*100).toFixed(2) : '0.00'}%</b></div>)}
+                                    <div className="e27-published-party is-neutral"><i/><span>Voto en blanco</span><strong>{numeroAR(detalle.blancos)}</strong><b>{detalle.total ? (detalle.blancos/detalle.total*100).toFixed(2) : '0.00'}%</b></div>
+                                    <div className="e27-published-party is-neutral"><i/><span>Voto nulo</span><strong>{numeroAR(detalle.nulos)}</strong><b>{detalle.total ? (detalle.nulos/detalle.total*100).toFixed(2) : '0.00'}%</b></div>
+                                  </div>
+                                </>}
+                              </div>
+                            </>;
+                          })()}
                         </section>
                       )}
                     </>
