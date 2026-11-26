@@ -3365,6 +3365,7 @@ export default function Elecciones2027() {
                             const circuitos = [...new Set([...CIRCUITOS_ELECTORALES, ...Object.keys(mesasPorCircuito)])].sort((a,b) => a.localeCompare(b,'es',{numeric:true}));
                             const calcularResultados = (codigo?: string) => {
                               const partidos: Record<string,{nombre:string;color:string;votos:number}> = {};
+                              const votosListas: Record<string,{nombre:string;sigla:string;candidato:string;color:string;partido:string;votos:number}> = {};
                               let blancos=0, nulos=0, mesasPublicadas=0;
                               const mesasDelAmbito = codigo ? (mesasPorCircuito[codigo] || []) : mesasPublicas;
                               for (const mesa of mesasDelAmbito) {
@@ -3381,11 +3382,20 @@ export default function Elecciones2027() {
                                   if (!partidos[id]) partidos[id] = { nombre: partido.nombre, color: partido.color || '#168eae', votos: 0 };
                                   partidos[id].votos += Number(fila.votos || 0);
                                 }
+                                for (const fila of reporte.elecciones_escrutinio_listas || []) {
+                                  const listaRel = fila.elecciones_listas;
+                                  const lista = Array.isArray(listaRel) ? listaRel[0] : listaRel;
+                                  if (!lista) continue;
+                                  const partido = partidos[String(lista.partido_id)];
+                                  const id = String(fila.lista_id || lista.id);
+                                  if (!votosListas[id]) votosListas[id] = { nombre: lista.nombre, sigla: lista.sigla, candidato: lista.candidato_principal || '', color: lista.color || '#7c3aed', partido: partido?.nombre || '', votos: 0 };
+                                  votosListas[id].votos += Number(fila.votos || 0);
+                                }
                               }
                               const lista = Object.values(partidos).sort((a,b) => b.votos-a.votos);
                               const votosPartidos = lista.reduce((sum,p) => sum+p.votos,0);
                               const total = votosPartidos + blancos + nulos;
-                              return { mesasPublicadas, mesasTotales: mesasDelAmbito.length, porcentajeMesas: mesasDelAmbito.length ? mesasPublicadas/mesasDelAmbito.length*100 : 0, lista, blancos, nulos, total };
+                              return { mesasPublicadas, mesasTotales: mesasDelAmbito.length, porcentajeMesas: mesasDelAmbito.length ? mesasPublicadas/mesasDelAmbito.length*100 : 0, lista, listas: Object.values(votosListas).sort((a,b) => b.votos-a.votos), blancos, nulos, total };
                             };
                             const municipal = calcularResultados();
                             const seleccionado = circuitoDashboard;
@@ -3425,6 +3435,10 @@ export default function Elecciones2027() {
                                     <div className="e27-published-party is-neutral"><i/><span>Voto en blanco</span><strong>{numeroAR(detalle.blancos)}</strong><b>{detalle.total ? (detalle.blancos/detalle.total*100).toFixed(2) : '0.00'}%</b></div>
                                     <div className="e27-published-party is-neutral"><i/><span>Voto nulo</span><strong>{numeroAR(detalle.nulos)}</strong><b>{detalle.total ? (detalle.nulos/detalle.total*100).toFixed(2) : '0.00'}%</b></div>
                                   </div>
+                                  {modalidadElectoral === 'paso' && detalle.listas.length > 0 && <div className="e27-published-party-list e27-published-list-detail">
+                                    <div className="e27-published-section-title"><div><span className="e27-kicker">COMPETENCIA INTERNA PASO</span><h4>Detalle de votos por lista</h4></div></div>
+                                    {detalle.listas.map((lista,index) => <div className="e27-published-party" key={index}><i style={{background:lista.color}}/><span>{lista.nombre}<small>{lista.partido} · {lista.sigla} · {lista.candidato}</small></span><strong>{numeroAR(lista.votos)}</strong><b>{detalle.total ? (lista.votos/detalle.total*100).toFixed(2) : '0.00'}%</b></div>)}
+                                  </div>}
                                 </>}
                               </div>
                             </>;
