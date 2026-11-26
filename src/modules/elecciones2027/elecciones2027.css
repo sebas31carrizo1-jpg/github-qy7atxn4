@@ -4375,3 +4375,9 @@
  .e27-college-admin-row { padding:13px; }
  .e27-college-edit-actions > button { flex:1 1 auto; }
 }
+
+/* Buscadores de administración: visibles y adaptados a móviles. */
+.e27-admin-search-label { display:block; margin:18px 0 7px; color:#315c73; font-size:13px; font-weight:800; letter-spacing:.3px; }
+.e27-admin-search { display:block; box-sizing:border-box; width:100%; min-width:0; min-height:48px; margin:10px 0 18px; padding:12px 15px; border:1.5px solid #b9dce9; border-radius:12px; background:#fff; color:#17415f; font:inherit; font-size:15px; outline:none; box-shadow:0 2px 8px rgba(20,70,100,.045); }
+.e27-admin-search::placeholder { color:#7793a2; opacity:1; }
+.e27-admin-search:focus { border-color:#168eae; box-shadow:0 0 0 3px rgba(22,142,174,.13); }
