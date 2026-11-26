@@ -3554,3 +3554,84 @@
     height:auto;
   }
 }
+
+
+/* Editor de cantidad y numeración de mesas por establecimiento. */
+.e27-user-mesas-config-form {
+  width:100%;
+  box-sizing:border-box;
+  gap:14px;
+}
+.e27-user-mesas-form-heading {
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+}
+.e27-user-mesas-form-heading strong {
+  color:#17465d;
+  font-size:16px;
+}
+.e27-user-mesas-form-heading span {
+  color:#527487;
+  font-size:12px;
+  line-height:1.5;
+}
+.e27-user-mesas-editor-list {
+  display:grid;
+  gap:9px;
+}
+.e27-user-mesa-editor {
+  display:grid;
+  grid-template-columns:minmax(90px,1fr) minmax(120px,1fr) auto;
+  align-items:end;
+  gap:10px;
+  padding:10px;
+  border:1px solid #d1e6ef;
+  border-radius:9px;
+  background:#f7fcfe;
+}
+.e27-user-mesa-editor label {
+  min-width:0;
+}
+.e27-user-mesa-editor > span {
+  padding-bottom:12px;
+  color:#668294;
+  font-size:11px;
+  line-height:1.35;
+}
+.e27-user-mesa-editor .e27-remove-mesa-button {
+  min-height:42px;
+  border-color:#e7c2c2 !important;
+  color:#a34444 !important;
+}
+.e27-user-mesas-config-form .e27-add-mesa-button {
+  align-self:flex-start;
+  min-height:42px;
+}
+.e27-user-mesas-config-form .e27-user-mesas-form-actions {
+  display:flex;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+  gap:9px;
+  padding-top:12px;
+  border-top:1px solid #d9eaf1;
+}
+@media(max-width:560px) {
+  .e27-user-mesa-editor {
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:8px;
+  }
+  .e27-user-mesa-editor label {
+    grid-column:1/-1;
+  }
+  .e27-user-mesa-editor > span {
+    padding-bottom:0;
+  }
+  .e27-user-mesa-editor .e27-remove-mesa-button {
+    grid-column:2;
+    grid-row:2;
+  }
+  .e27-user-mesas-config-form .e27-user-mesas-form-actions > button {
+    flex:1 1 130px;
+  }
+}
