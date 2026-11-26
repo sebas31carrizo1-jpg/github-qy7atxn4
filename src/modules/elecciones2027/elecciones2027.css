@@ -4431,3 +4431,54 @@
  .e27-review-card h4 { font-size:16px; }
  .e27-review-hours,.e27-review-votes { max-height:160px; }
 }
+
+
+/* Tablero de escrutinio publicado: total municipal, avance por circuito y votos. */
+.e27-published-dashboard { display:flex; flex-direction:column; gap:22px; }
+.e27-published-heading { display:flex; align-items:flex-end; justify-content:space-between; gap:18px; }
+.e27-published-heading h3 { margin:6px 0 7px; color:#174b67; font-family:'Source Serif 4',Georgia,serif; font-size:clamp(21px,2.4vw,28px); }
+.e27-published-heading p { margin:0; color:#648293; font-size:13px; line-height:1.5; }
+.e27-published-heading .e27-dashboard-filter { flex:0 1 300px; margin:0; }
+.e27-published-summary { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.e27-published-summary > article { display:flex; flex-direction:column; gap:7px; min-width:0; padding:17px; border:1px solid #c4e2ed; border-radius:13px; background:#f5fbfe; }
+.e27-published-summary > article.is-municipal { background:#eaf7fc; border-color:#a9d8e8; }
+.e27-published-summary > article > small { color:#1685a2; font-size:10px; font-weight:900; letter-spacing:.7px; }
+.e27-published-summary > article > strong { color:#174b67; font-size:34px; font-weight:900; line-height:1.05; font-variant-numeric:tabular-nums; }
+.e27-published-summary > article > b { color:#54788b; font-size:12px; }
+.e27-published-track,.e27-published-circuit > i { display:block; width:100%; height:9px; overflow:hidden; border-radius:99px; background:#dcebf1; }
+.e27-published-track > span,.e27-published-circuit > i > span { display:block; height:100%; border-radius:inherit; background:linear-gradient(90deg,#65c7df,#168eae); }
+.e27-published-circuits,.e27-published-results { display:flex; flex-direction:column; gap:12px; padding-top:18px; border-top:1px solid #d8eaf1; }
+.e27-published-section-title { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
+.e27-published-section-title h4 { margin:4px 0 0; color:#174b67; font-size:18px; }
+.e27-published-section-title > small { color:#6b8797; font-size:11px; }
+.e27-published-circuit-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:9px; }
+.e27-published-circuit { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; padding:12px; border:1px solid #c9e2ec; border-radius:11px; background:#f8fcfe; color:#174b67; text-align:left; cursor:pointer; transition:border-color .15s,background .15s,box-shadow .15s; }
+.e27-published-circuit:hover,.e27-published-circuit.is-selected { border-color:#168eae; background:#edf8fc; box-shadow:0 0 0 2px rgba(22,142,174,.1); }
+.e27-published-circuit > span { color:#1685a2; font-size:9px; font-weight:900; letter-spacing:.7px; }
+.e27-published-circuit > strong { font-size:23px; font-weight:900; font-variant-numeric:tabular-nums; }
+.e27-published-circuit > b { color:#607f91; font-size:10px; }
+.e27-published-circuit > i { height:6px; margin-top:2px; }
+.e27-published-vote-total { display:flex; flex-direction:column; gap:4px; padding:14px; border:1px solid #c7e3ed; border-radius:11px; background:#f2f9fc; }
+.e27-published-vote-total > span { color:#1685a2; font-size:9px; font-weight:900; letter-spacing:.7px; }
+.e27-published-vote-total > strong { color:#174b67; font-size:27px; font-weight:900; }
+.e27-published-vote-total > small { color:#648293; font-size:11px; }
+.e27-published-party-list { display:flex; flex-direction:column; gap:6px; }
+.e27-published-party { display:grid; grid-template-columns:10px minmax(0,1fr) auto 72px; align-items:center; gap:9px; padding:10px 11px; border:1px solid #e0edf2; border-radius:9px; background:#fff; }
+.e27-published-party > i { width:9px; height:9px; border-radius:3px; background:#168eae; }
+.e27-published-party > span { color:#315c73; font-size:12px; font-weight:700; overflow-wrap:anywhere; }
+.e27-published-party > strong { color:#174b67; font-size:13px; font-variant-numeric:tabular-nums; }
+.e27-published-party > b { color:#087f9f; font-size:12px; text-align:right; font-variant-numeric:tabular-nums; }
+.e27-published-party.is-neutral > i { background:#9aaab4; }
+.e27-published-party.is-neutral > b { color:#6b8797; }
+@media(max-width:650px) {
+ .e27-published-heading { align-items:stretch; flex-direction:column; }
+ .e27-published-heading .e27-dashboard-filter { flex-basis:auto; width:100%; box-sizing:border-box; }
+ .e27-published-summary { grid-template-columns:1fr; }
+ .e27-published-summary > article { padding:14px; }
+ .e27-published-summary > article > strong { font-size:29px; }
+ .e27-published-circuit-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .e27-published-circuit { padding:10px; }
+ .e27-published-party { grid-template-columns:9px minmax(0,1fr) auto 62px; gap:6px; padding:9px 8px; }
+ .e27-published-party > span { font-size:11px; }
+ .e27-published-party > strong,.e27-published-party > b { font-size:11px; }
+}
