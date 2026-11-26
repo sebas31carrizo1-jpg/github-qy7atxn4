@@ -3265,10 +3265,6 @@ export default function Elecciones2027() {
                         <section className="e27-panel e27-published-dashboard">
                           {(() => {
                             const escuelasPorId = new Map(colegiosPublicos.map((colegio) => [colegio.id, colegio]));
-                            const circuitoDeMesa = (mesaId: string) => {
-                              const mesa = mesasPublicas.find((item) => item.id === mesaId);
-                              return mesa ? String(escuelasPorId.get(mesa.colegio_id)?.circuito || '').trim() : '';
-                            };
                             const mesasPorCircuito: Record<string, Mesa[]> = {};
                             for (const mesa of mesasPublicas) {
                               const circuito = String(escuelasPorId.get(mesa.colegio_id)?.circuito || '').trim();
