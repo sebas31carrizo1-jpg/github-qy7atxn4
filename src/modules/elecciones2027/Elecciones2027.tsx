@@ -575,6 +575,8 @@ export default function Elecciones2027() {
   const [partidoColor, setPartidoColor] = useState('#2563eb');
   const [guardandoPartido, setGuardandoPartido] = useState(false);
   const [modalidadElectoral, setModalidadElectoral] = useState<'general' | 'paso'>('general');
+  const [modalidadPendiente, setModalidadPendiente] = useState<'general' | 'paso'>('general');
+  const [guardandoModalidad, setGuardandoModalidad] = useState(false);
   const [listasElectorales, setListasElectorales] = useState<ListaElectoral[]>([]);
   const [listaPartidoId, setListaPartidoId] = useState('');
   const [listaNombre, setListaNombre] = useState('');
@@ -885,7 +887,11 @@ export default function Elecciones2027() {
 
     if (!partidosResponse.error && partidosResponse.data) setPartidos(partidosResponse.data as Partido[]);
     if (!listasResponse.error && listasResponse.data) setListasElectorales(listasResponse.data as ListaElectoral[]);
-    if (!configuracionResponse.error && configuracionResponse.data?.modalidad) setModalidadElectoral(configuracionResponse.data.modalidad as 'general' | 'paso');
+    if (!configuracionResponse.error && configuracionResponse.data?.modalidad) {
+      const modalidadGuardada = configuracionResponse.data.modalidad as 'general' | 'paso';
+      setModalidadElectoral(modalidadGuardada);
+      setModalidadPendiente(modalidadGuardada);
+    }
     // El conteo oficial se obtiene desde una vista SQL calculada sobre las tablas reales.
     const { data: resumenDB, error: resumenError } = await supabase
       .from('elecciones_resumen_general')
@@ -926,6 +932,9 @@ export default function Elecciones2027() {
       reportesResponse.error,
       participacionResponse.error,
       resumenError,
+      partidosResponse.error,
+      listasResponse.error,
+      configuracionResponse.error,
     ].filter(Boolean);
     if (erroresLectura.length) {
       setErrorDatosPublicos('No se pudieron consultar todos los datos públicos. Revisá los permisos de lectura de colegios, mesas y reportes publicados en Supabase.');
@@ -1233,6 +1242,7 @@ export default function Elecciones2027() {
           : 'Esta cuenta no tiene perfil de Responsable de Escuela.');
       }
       await cargarPerfil(data.user.id);
+      await cargarPublico(true);
       setMostrarLogin(false); setPassword('');
     } catch (err) {
       await supabase.auth.signOut();
@@ -1416,7 +1426,8 @@ export default function Elecciones2027() {
       setPartidoNombre('');
       setPartidoSigla('');
       setPartidoColor('#168eae');
-      setMensaje(`El partido ${nombre} quedó guardado en Supabase.`);
+      await cargarPublico(true);
+      setMensaje(`El partido ${nombre} quedó guardado en Supabase y ya está disponible para los responsables.`);
     } catch (err) {
       setMensaje(err instanceof Error ? err.message : 'No se pudo guardar el partido.');
     } finally {
@@ -1424,12 +1435,26 @@ export default function Elecciones2027() {
     }
   };
 
-  const guardarModalidadElectoral = async (modalidad: 'general' | 'paso') => {
-    if (perfil?.rol !== 'administrador_general') return;
-    const { error } = await supabase.from('elecciones_configuracion').update({ modalidad, actualizado_por: perfil.user_id, actualizado_en: new Date().toISOString() }).eq('id', 1);
-    if (error) { setMensaje('No se pudo guardar la modalidad: ' + error.message); return; }
-    setModalidadElectoral(modalidad);
-    setMensaje(modalidad === 'paso' ? 'Modalidad PASO configurada. Recordá que la carga por listas requiere que cada mesa use la pantalla de listas.' : 'Modalidad de elección general guardada.');
+  const guardarModalidadElectoral = async () => {
+    if (perfil?.rol !== 'administrador_general' || guardandoModalidad) return;
+    setGuardandoModalidad(true);
+    setMensaje('');
+    try {
+      const { data, error } = await supabase.from('elecciones_configuracion')
+        .update({ modalidad: modalidadPendiente, actualizado_por: perfil.user_id, actualizado_en: new Date().toISOString() })
+        .eq('id', 1).select('modalidad').single();
+      if (error) throw error;
+      const guardada = data.modalidad as 'general' | 'paso';
+      setModalidadElectoral(guardada);
+      setModalidadPendiente(guardada);
+      await cargarPublico(true);
+      setMensaje(guardada === 'paso' ? 'Modalidad PASO confirmada y guardada. Los responsables ya pueden cargar por listas.' : 'Modalidad de elección general confirmada y guardada.');
+    } catch (err) {
+      setMensaje('No se pudo guardar la modalidad: ' + textoError(err, 'Error de guardado.'));
+      setModalidadPendiente(modalidadElectoral);
+    } finally {
+      setGuardandoModalidad(false);
+    }
   };
 
   const guardarListaElectoral = async (e: FormEvent<HTMLFormElement>) => {
@@ -3274,10 +3299,17 @@ export default function Elecciones2027() {
                       <p>La modalidad define cómo se organizará y presentará el escrutinio.</p>
                       <div className="e27-capture-form">
                         <label>Tipo de elección
-                          <select value={modalidadElectoral} onChange={(e) => void guardarModalidadElectoral(e.target.value as 'general' | 'paso')}>
+                          <select value={modalidadPendiente} onChange={(e) => setModalidadPendiente(e.target.value as 'general' | 'paso')}>
                             <option value="general">Elección general</option><option value="paso">PASO</option>
                           </select>
                         </label>
+                        <div className="e27-user-edit-buttons">
+                          <button type="button" className="e27-white-button" onClick={() => void guardarModalidadElectoral()} disabled={guardandoModalidad || modalidadPendiente === modalidadElectoral}>
+                            {guardandoModalidad ? 'Guardando modalidad…' : 'Confirmar y guardar modalidad'}
+                          </button>
+                          {modalidadPendiente !== modalidadElectoral && <button type="button" className="e27-white-button e27-white-button-outline" onClick={() => setModalidadPendiente(modalidadElectoral)} disabled={guardandoModalidad}>Cancelar</button>}
+                        </div>
+                        <small>Modalidad actualmente guardada: {modalidadElectoral === 'paso' ? 'PASO' : 'Elección general'}.</small>
                       </div>
                     </section>
                     <section className="e27-panel"><span className="e27-kicker">NUEVO PARTIDO POLÍTICO</span>
