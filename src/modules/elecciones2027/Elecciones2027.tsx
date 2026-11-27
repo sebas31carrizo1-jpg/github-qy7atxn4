@@ -1465,13 +1465,15 @@ export default function Elecciones2027() {
       return;
     }
     setGuardandoLista(true); setMensaje('');
-    const payload = { partido_id: listaPartidoId, nombre: listaNombre.trim(), sigla: listaSigla.trim().toUpperCase(), candidato_principal: listaCandidato.trim(), color: listaColor, activo: true, orden: listasElectorales.length + 1 };
+    const listaActual = listasElectorales.find((lista) => lista.id === listaEditandoId);
+    const payload = { partido_id: listaPartidoId, nombre: listaNombre.trim(), sigla: listaSigla.trim().toUpperCase(), candidato_principal: listaCandidato.trim(), color: listaColor, activo: listaActual?.activo ?? true, orden: listaActual?.orden ?? (listasElectorales.length + 1) };
     try {
       const query = listaEditandoId
         ? supabase.from('elecciones_listas').update(payload).eq('id', listaEditandoId)
         : supabase.from('elecciones_listas').insert(payload);
-      const { error } = await query;
+      const { data: guardada, error } = await query.select('id').single();
       if (error) throw error;
+      if (!guardada?.id) throw new Error('Supabase no confirmó el guardado de la lista.');
       const { data, error: reloadError } = await supabase.from('elecciones_listas').select('id,partido_id,nombre,sigla,candidato_principal,color,activo,orden').order('orden').order('nombre');
       if (reloadError) throw reloadError;
       setListasElectorales((data || []) as ListaElectoral[]);
